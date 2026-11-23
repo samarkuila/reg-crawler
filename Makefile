@@ -12,7 +12,7 @@ lint:
 	$(PY) -m ruff check .
 
 migrate:
-	@echo "not implemented until Prompt 7"
+	$(PY) -m alembic upgrade head
 
 seed-demo:
 	@echo "not implemented until Prompt 8"
