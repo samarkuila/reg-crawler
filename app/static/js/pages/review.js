@@ -14,7 +14,9 @@ const CHANGE_BADGES = {
   REAPPEARED: ["b-grey", "Reappeared"],
   RSS_ONLY: ["b-mod", "RSS only"],
   HTML_ONLY: ["b-mod", "HTML only"],
+  DISAGREE: ["b-urg", "Check: rules and Luna disagree"],
 };
+const LUNA_LEVEL = { HIGH: "High", MEDIUM: "Medium", LOW: "Low", NONE: "None" };
 const STATUS_PILLS = [
   ["NOT_APPLICABLE", "Not applicable", "dot-na"],
   ["ACTION_OVER", "Action over", "dot-done"],
@@ -189,6 +191,12 @@ function visibleAttention() {
   );
 }
 
+// "Luna" chip next to our own rank. Luna only suggests; the rank and the review are unchanged.
+function lunaChip(i) {
+  if (!i.luna || !i.luna.level) return "";
+  return ` <span class="b b-grey" title="Suggested by Luna">Luna ${escapeHtml(LUNA_LEVEL[i.luna.level] || i.luna.level)}</span>`;
+}
+
 function itemRow(i) {
   const badges = i.badges.filter((b) => CHANGE_BADGES[b]).map((b) => badge(CHANGE_BADGES[b])).join("");
   const sub = [i.note, i.relevance_reason].filter(Boolean).join(" · ");
@@ -207,7 +215,7 @@ function itemRow(i) {
     `<td>${escapeHtml(i.authority)}</td>` +
     `<td>${escapeHtml(formatDate(i.displayed_date))}</td>` +
     `<td><span class="b b-grey">${escapeHtml(i.channel_label)}</span></td>` +
-    `<td><div class="text-13">${escapeHtml(i.relevance_label)}</div>` +
+    `<td><div class="text-13">${escapeHtml(i.relevance_label)}${lunaChip(i)}</div>` +
     `<div class="meter${urgent ? " meter-urg" : ""}" style="--pct:${Math.max(0, Math.min(100, i.relevance_score))}%"><span></span></div></td>` +
     `<td>${badge([stateTone, i.state_label])}</td></tr>`
   );
@@ -283,6 +291,103 @@ function renderLow() {
 
 // ---------- Review panel ----------
 const statusDot = (value) => STATUS_PILLS.find((p) => p[0] === value)?.[2] ?? "";
+
+// Luna's suggestions: each value with the exact quote it was based on (checked against the text by
+// the server). "Use suggestion" copies the value into the form; the reviewer still decides.
+const LUNA_FIELDS = [
+  ["effective_date", "Effective date", "r-eff", "date"],
+  ["issue_date", "Issue date", "r-iss", "date"],
+  ["authority", "Authority", "r-auth", "text"],
+  ["ref_no", "Reference no.", "r-ref", "ref"],
+  ["impact_summary", "Impact on TVSCS", "r-imp", "text"],
+];
+
+function lunaHtml(detail) {
+  const l = detail.luna;
+  const ask = detail.luna_enabled
+    ? '<button type="button" class="btn btn-o" data-ask-luna>Ask Luna</button>'
+    : '<span class="muted text-13">Luna is off.</span>';
+  if (!l) {
+    return (
+      '<div class="evidence"><div class="evidence-title">Suggested by Luna</div>' +
+      `<div class="muted text-13">No suggestion yet.</div><div>${ask}</div></div>`
+    );
+  }
+  const rows = [];
+  if (l.level) {
+    rows.push(
+      `<div><strong>Relevance:</strong> ${escapeHtml(LUNA_LEVEL[l.level] || l.level)}` +
+        `${l.reason ? ` — ${escapeHtml(l.reason)}` : ""}</div>`,
+    );
+  }
+  if (l.addressed_to && l.addressed_to.length) rows.push(`<div><strong>Addressed to:</strong> ${escapeHtml(l.addressed_to.join(", "))}</div>`);
+  if (l.disagreement) {
+    rows.push(
+      `<div class="alert-body"><strong>Check — rules and Luna disagree</strong> (rules: ${escapeHtml(l.disagreement.rule_level)}, Luna: ${escapeHtml(l.disagreement.luna_level)}). Please read it yourself.</div>`,
+    );
+  }
+  for (const q of l.evidence || []) {
+    rows.push(`<div class="text-13">\u2713 \u201c${escapeHtml(q.quote)}\u201d <span class="muted">${escapeHtml(q.location || "")}</span></div>`);
+  }
+  if (l.treatment) {
+    rows.push(
+      `<div>Treatment: ${escapeHtml(l.treatment.replaceAll("_", " ").toLowerCase())} ` +
+        '<button type="button" class="btn btn-o" data-use-luna="treatment" data-value="' + escapeHtml(l.treatment) + '">Use suggestion</button></div>',
+    );
+  }
+  if (l.sme_function) {
+    rows.push(
+      `<div>SME function: ${escapeHtml(l.sme_function)} ` +
+        '<button type="button" class="btn btn-o" data-use-luna="sme" data-value="' + escapeHtml(l.sme_function) + '">Use suggestion</button></div>',
+    );
+  }
+  for (const [key, label, target, kind] of LUNA_FIELDS) {
+    const f = (l.fields || {})[key];
+    if (!f || f.value == null || !f.validated) continue;
+    const shown = kind === "date" ? formatDate(f.value) : f.value;
+    rows.push(
+      `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(shown)} ` +
+        `<button type="button" class="btn btn-o" data-use-luna="${target}" data-kind="${kind}" data-value="${escapeHtml(f.value)}">Use suggestion</button>` +
+        `<div class="text-13 muted">\u2713 \u201c${escapeHtml(f.evidence_quote)}\u201d ${escapeHtml(f.location || "")}</div></div>`,
+    );
+  }
+  const meta = `${l.model || "model"} · prompt ${l.prompt_version || "-"}${l.guidance_version ? ` · guidance v${l.guidance_version}` : ""}`;
+  return (
+    '<div class="evidence"><div class="evidence-title">Suggested by Luna</div>' +
+    rows.join("") +
+    `<div class="text-13 muted">${escapeHtml(meta)}. Only a suggestion: you decide.</div>` +
+    `<div>${ask}</div></div>`
+  );
+}
+
+function useLunaSuggestion(button) {
+  const { useLuna: target, value, kind } = button.dataset;
+  const form = $("rv-form");
+  if (!form) return;
+  if (target === "treatment") form.querySelector("#r-tr").value = value;
+  else if (target === "sme") {
+    const select = form.querySelector("#r-sme");
+    const match = [...select.options].find((o) => o.textContent.trim().toLowerCase() === value.toLowerCase());
+    if (match) select.value = match.value;
+    else toast(`No SME function named “${value}” in Settings.`, { type: "info" });
+  } else {
+    const field = form.querySelector(`#${target}`);
+    if (field) field.value = kind === "date" ? formatDate(value) : value;
+  }
+  toast("Suggestion copied into the form. Check it, then Accept or Save.", { type: "ok" });
+}
+
+async function askLuna() {
+  if (!state.selectedId) return;
+  try {
+    state.detail = await post(`/items/${encodeURIComponent(state.selectedId)}/ask-luna`);
+  } catch {
+    return; // api() has shown why (for example "Luna is switched off")
+  }
+  const panel = $("rv-panel");
+  panel.innerHTML = panelHtml(state.detail);
+  toast("Luna's suggestion is ready.", { type: "ok" });
+}
 
 function evidenceHtml(detail) {
   const i = detail.item;
@@ -362,6 +467,7 @@ function panelHtml(detail) {
     `<div class="field"><label for="r-tr">Treatment</label><select id="r-tr" name="treatment"><option value="">Choose…</option>${TREATMENTS.map(([v, l]) => option(v, l, treatment)).join("")}</select></div>` +
     `<div class="field"><label for="r-sme">SME function</label><select id="r-sme" name="sme_function"><option value="">None</option>${state.sme.map((f) => option(f.id, f.name, sme)).join("")}</select></div></div>` +
     `<label class="check"><input type="checkbox" name="include_in_update"${include ? " checked" : ""}> Include in today’s update</label>` +
+    lunaHtml(detail) +
     evidenceHtml(detail) +
     '<div class="drawer-actions">' +
     '<button type="button" class="btn btn-g btn-fill" data-act="accept">Accept</button>' +
@@ -600,6 +706,9 @@ document.addEventListener("click", (e) => {
     openPanel(row.dataset.id);
     return;
   }
+  const useLuna = target.closest("[data-use-luna]");
+  if (useLuna) return void useLunaSuggestion(useLuna);
+  if (target.closest("[data-ask-luna]")) return void askLuna();
   const manual = target.closest("[data-manual-check]");
   if (manual) return void markChecked(manual.dataset.manualCheck);
   const upload = target.closest("[data-upload]");

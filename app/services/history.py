@@ -156,6 +156,7 @@ class HistoryService:
             self._change_step(item),
             self._snapshot_step(item, source),
             self._config_step(source),
+            self._agent_step(item_id),
         ]
         for n, step in enumerate(steps, start=1):
             step.number = n
@@ -291,6 +292,33 @@ class HistoryService:
             links=links,
             at=doc.fetched_at,
             who=doc.uploaded_by,
+        )
+
+    def _agent_step(self, item_id: str) -> TrailStep:
+        """Luna's part: which model, prompt and guidance version produced the suggestions."""
+        done = self._repo.list_extractions(item_id)
+        if not done:
+            return TrailStep(
+                number=0,
+                kind="agent",
+                title="Luna suggestion",
+                text="No suggestion from Luna for this item (Luna was off or had nothing to add).",
+                present=False,
+            )
+        last = done[-1]
+        tasks = " and ".join(sorted({d.task.value.lower() for d in done}))
+        guidance = f", guidance version {last.guidance_version}" if last.guidance_version else ""
+        return TrailStep(
+            number=0,
+            kind="agent",
+            title="Suggested by Luna",
+            badge=TrailBadge(tone="grey", label="Suggestion only"),
+            text=(
+                f"Luna ({last.model}) made a {tasks} suggestion with prompt "
+                f"{last.prompt_version}{guidance}. A person decides; nothing was applied."
+            ),
+            at=last.created_at,
+            who=f"agent:luna ({last.model})",
         )
 
     def _runs_by_id(self) -> dict:  # type: ignore[type-arg]

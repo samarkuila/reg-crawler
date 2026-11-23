@@ -138,6 +138,65 @@ class CrawlRunIn(Model):
 ItemSection = Literal["attention", "manual_fetch", "low_relevance"]
 
 
+class LunaChip(Model):
+    """Luna's reading of an item, shown next to our own rank. A suggestion, never a decision."""
+
+    level: Literal["HIGH", "MEDIUM", "LOW", "NONE"] | None = None
+    score: float | None = None
+    disagreement: bool = False  # our rules and Luna are two levels or more apart
+
+
+class LunaSuggestions(Model):
+    """What Luna suggested for one item, with the quotes that were checked against the text."""
+
+    level: Literal["HIGH", "MEDIUM", "LOW", "NONE"] | None = None
+    score: float | None = None
+    reason: str | None = None
+    addressed_to: list[str] = Field(default_factory=list)
+    treatment: str | None = None
+    sme_function: str | None = None
+    urgency: str | None = None
+    evidence: list[dict[str, Any]] = Field(default_factory=list)  # validated quotes only
+    fields: dict[str, dict[str, Any]] = Field(default_factory=dict)  # extract: value + quote
+    model: str | None = None
+    deployment: str | None = None
+    prompt_version: str | None = None
+    guidance_version: int | None = None
+    created_at: datetime | None = None
+    disagreement: dict[str, Any] | None = None  # {rule_level, luna_level, ...} when flagged
+
+
+class AgentStatusOut(Model):
+    enabled: bool  # environment flag AND the setting
+    env_enabled: bool
+    setting_enabled: bool
+    configured: bool
+    problem: str | None = None
+    daily_budget_inr: float
+    spent_today_inr: float
+    open_flags: int
+
+
+class AgentFlagView(Model):
+    id: str
+    type: Literal["POSSIBLE_MISS", "DISAGREEMENT"]
+    status: Literal["OPEN", "RESOLVED", "FALSE_ALARM"]
+    source_id: str | None
+    authority: str | None
+    page_name: str | None
+    item_id: str | None
+    item_title: str | None
+    snapshot_id: str | None
+    payload: dict[str, Any]
+    created_at: datetime
+    resolved_by: str | None = None
+    resolved_at: datetime | None = None
+
+
+class ResolveFlagIn(Model):
+    status: Literal["RESOLVED", "FALSE_ALARM"]
+
+
 class ItemSummary(Model):
     id: str
     internal_ref: str
@@ -164,6 +223,7 @@ class ItemSummary(Model):
     section: ItemSection
     decided: bool
     first_seen_at: datetime
+    luna: LunaChip | None = None
 
 
 class ItemCounts(Model):
@@ -225,6 +285,8 @@ class ItemDetail(Model):
     source: Source
     source_version: SourceVersion | None
     chain: list[TraceStep]
+    luna: LunaSuggestions | None = None
+    luna_enabled: bool = False
 
 
 class DecisionIn(Model):
@@ -460,6 +522,7 @@ class GridRow(Model):
     channel: str
     cells: list[GridCell]
     items_latest: str  # "10", "1 change" or "—"
+    possible_misses: int = 0  # open "possible missed item" flags from Luna's sweep
     needs_attention: bool
     actions: list[GridAction]
 
@@ -533,7 +596,7 @@ class TrailBadge(Model):
 
 class TrailStep(Model):
     number: int
-    kind: Literal["email", "decision", "document", "change", "snapshot", "source_config"]
+    kind: Literal["email", "decision", "agent", "document", "change", "snapshot", "source_config"]
     title: str
     badge: TrailBadge | None = None
     text: str

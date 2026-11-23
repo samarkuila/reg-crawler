@@ -9,6 +9,9 @@ from typing import Any, Protocol
 
 from app.schemas.api import CycleRef, ItemFilter
 from app.schemas.entities import (
+    AgentFlag,
+    AgentRun,
+    AiExtraction,
     Alert,
     AppUser,
     AuditEvent,
@@ -30,7 +33,7 @@ from app.schemas.entities import (
     SourceCheck,
     SourceVersion,
 )
-from app.schemas.enums import Cycle, ItemState, RunStatus
+from app.schemas.enums import Cycle, FlagStatus, ItemState, RunStatus
 
 
 class Repository(Protocol):
@@ -112,6 +115,23 @@ class Repository(Protocol):
     def save_decisions(
         self, decisions: list[ReviewDecision], new_state: ItemState, actor: str
     ) -> list[ReviewDecision]: ...
+
+    # --- Luna agent (advisory: it can write only these three tables, never a decision) -------
+    def save_extraction(self, ext: AiExtraction, enrich: bool, actor: str) -> AiExtraction: ...
+    def list_extractions(self, item_id: str) -> list[AiExtraction]: ...
+    def add_agent_run(self, run: AgentRun, actor: str) -> AgentRun: ...
+    def list_agent_runs(self, day: date | None = None) -> list[AgentRun]: ...
+    def add_agent_flags(self, flags: list[AgentFlag], actor: str) -> list[AgentFlag]: ...
+    def list_agent_flags(
+        self,
+        source_id: str | None = None,
+        run_id: str | None = None,
+        item_id: str | None = None,
+        status: FlagStatus | None = None,
+    ) -> list[AgentFlag]: ...
+    def resolve_agent_flag(
+        self, flag_id: str, status: FlagStatus, resolved_by: str, actor: str
+    ) -> AgentFlag: ...
 
     # --- daily update ------------------------------------------------------------------------
     def find_daily_update(self, ref: CycleRef) -> DailyUpdate | None: ...

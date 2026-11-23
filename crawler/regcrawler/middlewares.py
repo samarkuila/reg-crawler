@@ -82,6 +82,8 @@ class BlockDetectionMiddleware:
     def __init__(self, crawler: Any, config: CrawlerConfig | None = None) -> None:
         self.crawler = crawler
         self.config = config or load_config()
+        # Production (built by Scrapy, no config passed): a live request needs a real contact.
+        self._require_contact = config is None
 
     @classmethod
     def from_crawler(cls, crawler: Any) -> "BlockDetectionMiddleware":
@@ -93,6 +95,16 @@ class BlockDetectionMiddleware:
         return getattr(spider, "check", None)
 
     def process_request(self, request: Request) -> None:
+        if (
+            self._require_contact
+            and self.config.contact_is_placeholder
+            and request.url.lower().startswith(("http://", "https://"))
+        ):
+            # Politeness (rule 2): the User-Agent must carry a real contact before a live crawl.
+            raise IgnoreRequest(
+                "The crawler contact in config/settings.yaml is still a placeholder "
+                f"({self.config.contact}); set crawler.contact_email before a live crawl."
+            )
         tracker = self._tracker
         if tracker is not None and tracker.blocked:
             raise IgnoreRequest(f"Source already blocked in this run; not requesting {request.url}")

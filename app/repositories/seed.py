@@ -834,6 +834,12 @@ def settings() -> list[Setting]:
             email_template().model_dump(mode="json", exclude={"version", "id"}),
             "Wording of the daily update email",
         ),
+        s(
+            "agent-enabled",
+            True,
+            "Luna on/off. Also needs AGENT_LUNA_ENABLED=true in the environment",
+        ),
+        s("agent-daily-budget-inr", 200, "Most Luna may spend in one day (INR); then it pauses"),
         s("working-days", ["MON", "TUE", "WED", "THU", "FRI"], "Days the scheduled runs happen"),
         s("holidays", [], "Dates with no scheduled run (DD.MM.YYYY)"),
         s("lookback-days", 2, "Days of listings each run re-reads"),

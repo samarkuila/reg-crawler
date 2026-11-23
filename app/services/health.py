@@ -13,7 +13,7 @@ from app.schemas.api import (
     SourceGrid,
 )
 from app.schemas.entities import SourceCheck
-from app.schemas.enums import Channel, CheckChannel, CheckStatus
+from app.schemas.enums import Channel, CheckChannel, CheckStatus, FlagStatus, FlagType
 from app.services.errors import NotFoundError
 from app.services.formatting import CYCLE_NAMES, fmt_time
 from app.services.review import STATUS_LABELS, ReviewService
@@ -158,6 +158,15 @@ class HealthService:
             channel=channel.value,
             cells=cells,
             items_latest=items,
+            possible_misses=len(
+                [
+                    f
+                    for f in self._repo.list_agent_flags(
+                        source_id=source_id, status=FlagStatus.OPEN
+                    )
+                    if f.type == FlagType.POSSIBLE_MISS
+                ]
+            ),
             needs_attention=needs,
             actions=actions,
         )

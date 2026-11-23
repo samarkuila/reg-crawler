@@ -3,6 +3,7 @@
     python -m app.cli import-sources config/sources.yaml --actor "Samarendra K."
     python -m app.cli import-monitoring-excel monitoring.xlsx --actor "Samarendra K."
     python -m app.cli seed-demo [--reset]
+    python -m app.cli agent-eval --golden tests/fixtures/agent/golden.jsonl [--fake]
     python -m app.cli detect --run <run id> [--documents]
     python -m app.cli new-run --actor "Samarendra K." [--cycle ADHOC]
 
@@ -75,6 +76,58 @@ def cmd_detect(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_agent_eval(args: argparse.Namespace) -> int:
+    """Measure Luna on a labelled golden set and write docs/agent-eval-report.md."""
+    from app.agents import evaluation
+    from app.agents.luna.agent import LunaAgent
+    from app.services.llm import LlmConfig, LoggedLlm, make_llm_client
+
+    golden = Path(args.golden)
+    items = evaluation.load_golden(golden)
+    if args.fake:
+        client, label = evaluation.heuristic_client(), "fake (keyword stand-in, no model)"
+    else:
+        config = LlmConfig.from_env()
+        problem = config.problem()
+        if problem:
+            raise ImportError_(
+                f"Cannot run the evaluation: {problem}. Set the LLM_* variables in .env, "
+                "or use --fake to check the plumbing only."
+            )
+        client, label = make_llm_client(config), f"{config.provider} / {config.model}"
+    text, version = "", None
+    try:
+        from app.agents import settings as agent_settings
+
+        text, version = agent_settings.guidance(_repository())
+    except RuntimeError:  # no database yet: the default guidance below is used
+        pass
+    if not text:
+        from app.repositories.seed import SCREENING_GUIDANCE
+
+        text = SCREENING_GUIDANCE
+    report = evaluation.evaluate(LunaAgent(LoggedLlm(client)), items, text, version)
+    report.client, report.fake = label, args.fake
+    out = Path(args.out)
+    note = (
+        f"Only {len(items)} items: the spec asks for 50 or more labelled by Compliance. "
+        "Treat the numbers as a smoke test."
+        if len(items) < 50
+        else ""
+    )
+    evaluation.write_report(report, out, golden, note)
+    print(f"Wrote {out} ({len(items)} items, client: {label}).")
+    for name, value in (
+        ("recall", report.recall()),
+        ("precision of HIGH", report.precision_high()),
+        ("quote validity", report.quote_validity()),
+        ("field accuracy", report.field_accuracy()),
+    ):
+        print(f"  {name}: {'n/a' if value is None else f'{value * 100:.0f}%'}")
+    print(f"  cost: Rs {report.cost():.2f}")
+    return 0
+
+
 def _migrate(url: str) -> None:
     from alembic import command
     from alembic.config import Config
@@ -139,6 +192,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run", required=True, help="Crawl run id (see new-run)")
     p.add_argument("--documents", action="store_true", help="Also fetch and store documents")
     p.set_defaults(func=cmd_detect)
+
+    p = sub.add_parser("agent-eval", help="Evaluate Luna on a golden set (writes a report)")
+    p.add_argument("--golden", default="tests/fixtures/agent/golden.jsonl")
+    p.add_argument("--out", default="docs/agent-eval-report.md")
+    p.add_argument("--fake", action="store_true", help="Keyword stand-in: checks plumbing only")
+    p.set_defaults(func=cmd_agent_eval)
 
     p = sub.add_parser("seed-demo", help="Load the mockup demo data into an empty database")
     p.add_argument("--reset", action="store_true", help="Delete the SQLite file first")

@@ -92,7 +92,10 @@ CONFIG_TABLES = {
     "setting": "key value version description updated_by updated_at pending",
 }
 # raw_listing_item: Prompt 9; alert: Prompt 13
-EXTRA_TABLES = {"internal_ref_counter", "raw_listing_item", "alert"}
+EXTRA_TABLES = {
+    "internal_ref_counter", "raw_listing_item", "alert",
+    "ai_extraction", "agent_flag", "agent_run",
+}
 
 
 def columns(engine: Engine, table: str) -> set[str]:

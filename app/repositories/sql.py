@@ -33,6 +33,9 @@ from app.db.session import make_session_factory, session_scope
 from app.schemas.api import CycleRef, ItemFilter
 from app.schemas.entities import (
     IST,
+    AgentFlag,
+    AgentRun,
+    AiExtraction,
     Alert,
     AppUser,
     AuditEvent,
@@ -56,7 +59,7 @@ from app.schemas.entities import (
     SourceVersion,
     now_ist,
 )
-from app.schemas.enums import Cycle, ItemState, RunStatus, UpdateStatus, VersionStatus
+from app.schemas.enums import Cycle, FlagStatus, ItemState, RunStatus, UpdateStatus, VersionStatus
 
 _ENTITY_TO_MODEL: dict[type[BaseModel], type[m.Base]] = {
     AppUser: m.AppUser,
@@ -67,6 +70,9 @@ _ENTITY_TO_MODEL: dict[type[BaseModel], type[m.Base]] = {
     Snapshot: m.Snapshot,
     RawListingItem: m.RawListingItem,
     Alert: m.Alert,
+    AiExtraction: m.AiExtraction,
+    AgentRun: m.AgentRun,
+    AgentFlag: m.AgentFlag,
     RegulatoryItem: m.RegulatoryItem,
     ItemObservation: m.ItemObservation,
     Document: m.Document,
@@ -458,6 +464,95 @@ class SqlRepository:
             session.add(_to_row(m.CrawlRun, run))
             self._audit(session, actor, "crawl_run.created", "crawl_run", run.id, None, _dump(run))
             return run.model_copy(deep=True)
+
+    # --- Luna agent ----------------------------------------------------------------------------
+
+    def save_extraction(self, ext: AiExtraction, enrich: bool, actor: str) -> AiExtraction:
+        with self._tx() as session:
+            if session.get(m.RegulatoryItem, ext.item_id) is None:
+                raise KeyError(ext.item_id)
+            session.add(_to_row(m.AiExtraction, ext))
+            self._audit(
+                session, actor, "ai_extraction.saved", "ai_extraction", ext.id, None, _dump(ext)
+            )
+            session.flush()
+            row = session.get(m.RegulatoryItem, ext.item_id)
+            if enrich and row is not None and row.state == ItemState.DETECTED:
+                self._set_state(session, ext.item_id, ItemState.ENRICHED, actor)
+            return ext.model_copy(deep=True)
+
+    def list_extractions(self, item_id: str) -> list[AiExtraction]:
+        with self._tx() as session:
+            stmt = (
+                select(m.AiExtraction)
+                .where(m.AiExtraction.item_id == item_id)
+                .order_by(m.AiExtraction.created_at, m.AiExtraction.id)
+            )
+            return [_to_entity(AiExtraction, r) for r in session.scalars(stmt)]
+
+    def add_agent_run(self, run: AgentRun, actor: str) -> AgentRun:
+        with self._tx() as session:
+            session.add(_to_row(m.AgentRun, run))
+            self._audit(session, actor, "agent_run.logged", "agent_run", run.id, None, _dump(run))
+            return run.model_copy(deep=True)
+
+    def list_agent_runs(self, day: date | None = None) -> list[AgentRun]:
+        with self._tx() as session:
+            stmt = select(m.AgentRun).order_by(m.AgentRun.created_at, m.AgentRun.id)
+            runs = [_to_entity(AgentRun, r) for r in session.scalars(stmt)]
+        return [r for r in runs if day is None or r.created_at.date() == day]
+
+    def add_agent_flags(self, flags: list[AgentFlag], actor: str) -> list[AgentFlag]:
+        if not flags:
+            return []
+        with self._tx() as session:
+            for flag in flags:
+                session.add(_to_row(m.AgentFlag, flag))
+            self._audit(
+                session,
+                actor,
+                "agent_flags.recorded",
+                "agent_flag",
+                flags[0].id,
+                None,
+                {"count": len(flags), "types": sorted({f.type.value for f in flags})},
+            )
+            return [f.model_copy(deep=True) for f in flags]
+
+    def list_agent_flags(
+        self,
+        source_id: str | None = None,
+        run_id: str | None = None,
+        item_id: str | None = None,
+        status: FlagStatus | None = None,
+    ) -> list[AgentFlag]:
+        with self._tx() as session:
+            stmt = select(m.AgentFlag).order_by(m.AgentFlag.created_at, m.AgentFlag.id)
+            if source_id is not None:
+                stmt = stmt.where(m.AgentFlag.source_id == source_id)
+            if run_id is not None:
+                stmt = stmt.where(m.AgentFlag.run_id == run_id)
+            if item_id is not None:
+                stmt = stmt.where(m.AgentFlag.item_id == item_id)
+            if status is not None:
+                stmt = stmt.where(m.AgentFlag.status == status)
+            return [_to_entity(AgentFlag, r) for r in session.scalars(stmt)]
+
+    def resolve_agent_flag(
+        self, flag_id: str, status: FlagStatus, resolved_by: str, actor: str
+    ) -> AgentFlag:
+        with self._tx() as session:
+            row = session.get(m.AgentFlag, flag_id)
+            if row is None:
+                raise KeyError(flag_id)
+            before = _dump(_to_entity(AgentFlag, row))
+            row.status, row.resolved_by, row.resolved_at = status, resolved_by, now_ist()
+            session.flush()
+            after = _to_entity(AgentFlag, row)
+            self._audit(
+                session, actor, "agent_flag.resolved", "agent_flag", flag_id, before, _dump(after)
+            )
+            return after
 
     def close_run(self, run_id: str, status: RunStatus, actor: str) -> CrawlRun:
         with self._tx() as session:

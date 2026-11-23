@@ -18,6 +18,9 @@ from pydantic import BaseModel
 
 from app.schemas.api import CycleRef, ItemFilter
 from app.schemas.entities import (
+    AgentFlag,
+    AgentRun,
+    AiExtraction,
     Alert,
     AppUser,
     AuditEvent,
@@ -41,7 +44,7 @@ from app.schemas.entities import (
     SourceVersion,
     now_ist,
 )
-from app.schemas.enums import Cycle, ItemState, RunStatus, UpdateStatus, VersionStatus
+from app.schemas.enums import Cycle, FlagStatus, ItemState, RunStatus, UpdateStatus, VersionStatus
 
 _COLLECTIONS: dict[type[BaseModel], str] = {
     AppUser: "users",
@@ -52,6 +55,9 @@ _COLLECTIONS: dict[type[BaseModel], str] = {
     Snapshot: "snapshots",
     RawListingItem: "raw_items",
     Alert: "alerts",
+    AiExtraction: "extractions",
+    AgentRun: "agent_runs",
+    AgentFlag: "agent_flags",
     RegulatoryItem: "items",
     ItemObservation: "observations",
     Document: "documents",
@@ -305,6 +311,75 @@ class MemoryRepository:
             self._s["runs"][run.id] = run
             self._audit(actor, "crawl_run.created", "crawl_run", run.id, None, _dump(run))
             return run.model_copy(deep=True)
+
+    # --- Luna agent ----------------------------------------------------------------------------
+
+    def save_extraction(self, ext: AiExtraction, enrich: bool, actor: str) -> AiExtraction:
+        with self._txn():
+            if ext.item_id not in self._s["items"]:
+                raise KeyError(ext.item_id)
+            self._s["extractions"][ext.id] = ext.model_copy(deep=True)
+            self._audit(actor, "ai_extraction.saved", "ai_extraction", ext.id, None, _dump(ext))
+            if enrich and self._s["items"][ext.item_id].state == ItemState.DETECTED:
+                self._set_state(ext.item_id, ItemState.ENRICHED, actor)
+            return ext.model_copy(deep=True)
+
+    def list_extractions(self, item_id: str) -> list[AiExtraction]:
+        found = [e for e in self._all("extractions") if e.item_id == item_id]
+        return sorted(found, key=lambda e: (e.created_at, e.id))
+
+    def add_agent_run(self, run: AgentRun, actor: str) -> AgentRun:
+        with self._txn():
+            self._s["agent_runs"][run.id] = run.model_copy(deep=True)
+            self._audit(actor, "agent_run.logged", "agent_run", run.id, None, _dump(run))
+            return run.model_copy(deep=True)
+
+    def list_agent_runs(self, day: date | None = None) -> list[AgentRun]:
+        found = [r for r in self._all("agent_runs") if day is None or r.created_at.date() == day]
+        return sorted(found, key=lambda r: (r.created_at, r.id))
+
+    def add_agent_flags(self, flags: list[AgentFlag], actor: str) -> list[AgentFlag]:
+        if not flags:
+            return []
+        with self._txn():
+            for flag in flags:
+                self._s["agent_flags"][flag.id] = flag.model_copy(deep=True)
+            self._audit(
+                actor,
+                "agent_flags.recorded",
+                "agent_flag",
+                flags[0].id,
+                None,
+                {"count": len(flags), "types": sorted({f.type.value for f in flags})},
+            )
+            return [f.model_copy(deep=True) for f in flags]
+
+    def list_agent_flags(
+        self,
+        source_id: str | None = None,
+        run_id: str | None = None,
+        item_id: str | None = None,
+        status: FlagStatus | None = None,
+    ) -> list[AgentFlag]:
+        found = [
+            f
+            for f in self._all("agent_flags")
+            if (source_id is None or f.source_id == source_id)
+            and (run_id is None or f.run_id == run_id)
+            and (item_id is None or f.item_id == item_id)
+            and (status is None or f.status == status)
+        ]
+        return sorted(found, key=lambda f: (f.created_at, f.id))
+
+    def resolve_agent_flag(
+        self, flag_id: str, status: FlagStatus, resolved_by: str, actor: str
+    ) -> AgentFlag:
+        with self._txn():
+            flag = self._s["agent_flags"][flag_id]
+            before = _dump(flag)
+            flag.status, flag.resolved_by, flag.resolved_at = status, resolved_by, now_ist()
+            self._audit(actor, "agent_flag.resolved", "agent_flag", flag_id, before, _dump(flag))
+            return flag.model_copy(deep=True)
 
     def close_run(self, run_id: str, status: RunStatus, actor: str) -> CrawlRun:
         with self._txn():

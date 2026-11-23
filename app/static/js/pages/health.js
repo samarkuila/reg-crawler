@@ -116,10 +116,42 @@ function renderGrid() {
       return (
         `<tr${r.needs_attention ? ' class="row-alert"' : ""}>` +
         `<td class="fw-500">${escapeHtml(r.authority)} · ${escapeHtml(r.page_name)}</td><td>${escapeHtml(r.channel)}</td>` +
-        `${cells}<td>${escapeHtml(r.items_latest)}</td><td><div class="row gap-2">${actions}</div></td></tr>`
+        `${cells}<td>${escapeHtml(r.items_latest)}${missesLink(r)}</td><td><div class="row gap-2">${actions}</div></td></tr>`
       );
     })
     .join("");
+}
+
+// Luna's sweep may notice listing entries the parser missed. A count per source, with the list.
+function missesLink(r) {
+  if (!r.possible_misses) return "";
+  return ` <a href="#" class="b b-urg" data-misses="${escapeHtml(r.source_id)}">${r.possible_misses} possible missed item${r.possible_misses === 1 ? "" : "s"}</a>`;
+}
+
+async function showMisses(sourceId) {
+  const flags = (await get("/agent/flags", { source_id: sourceId })).filter((f) => f.type === "POSSIBLE_MISS");
+  const body = flags.length
+    ? '<ul class="plain-list text-14">' +
+      flags
+        .map(
+          (f) =>
+            `<li><strong>Possible missed item — check parser:</strong> ${escapeHtml(f.payload.title)}` +
+            `${f.payload.date_text ? ` (${escapeHtml(f.payload.date_text)})` : ""}<br>` +
+            `<span class="muted">\u201c${escapeHtml(f.payload.evidence_quote)}\u201d — ${escapeHtml(f.payload.why_regulatory)}</span><br>` +
+            `<button type="button" class="btn btn-o" data-flag="${escapeHtml(f.id)}" data-status="RESOLVED">Resolved</button> ` +
+            `<button type="button" class="btn btn-o" data-flag="${escapeHtml(f.id)}" data-status="FALSE_ALARM">False alarm</button></li>`,
+        )
+        .join("") +
+      "</ul>"
+    : '<p class="text-14">No open flags.</p>';
+  await showModal(`Possible missed items · ${flags[0] ? flags[0].authority : sourceId}`, body);
+}
+
+async function resolveFlag(button) {
+  await post(`/agent/flags/${encodeURIComponent(button.dataset.flag)}/resolve`, { status: button.dataset.status });
+  toast("Recorded.", { type: "ok" });
+  button.closest("li").remove();
+  await loadGrid();
 }
 
 // ---------- Actions ----------
@@ -205,6 +237,13 @@ async function runOne() {
 document.addEventListener("click", async (e) => {
   const t = e.target instanceof Element ? e.target : null;
   if (!t) return;
+  const misses = t.closest("[data-misses]");
+  if (misses) {
+    e.preventDefault();
+    return void showMisses(misses.dataset.misses).catch(() => {});
+  }
+  const flag = t.closest("[data-flag]");
+  if (flag) return void resolveFlag(flag).catch(() => {});
   if (t.closest("#sh-run-all")) return void startRun(null);
   if (t.closest("#sh-run-one")) return void runOne();
   const act = t.closest("[data-act]");

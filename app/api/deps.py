@@ -4,6 +4,7 @@ import os
 
 from fastapi import Depends, Request
 
+from app.agents.factory import make_agent_orchestrator
 from app.repositories.factory import make_repository
 from app.schemas.entities import AppUser
 from app.services import Services, build_services
@@ -35,7 +36,10 @@ def make_crawl_runner(repo) -> CrawlRunner:  # type: ignore[no-untyped-def]
     default = "live" if os.environ.get("REPO_BACKEND", "memory").lower() == "sql" else "demo"
     if os.environ.get("CRAWL_RUNNER", default).strip().lower() == "live":
         return CrawlRunner(
-            repo, SubprocessLauncher(), DocumentService(repo, SubprocessDocumentFetcher())
+            repo,
+            SubprocessLauncher(),
+            DocumentService(repo, SubprocessDocumentFetcher()),
+            agent=make_agent_orchestrator(repo),
         )
     return CrawlRunner(
         repo,

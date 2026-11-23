@@ -67,3 +67,53 @@ def test_scrapy_can_load_the_project_settings() -> None:
     loaded = Settings()
     loaded.setmodule("regcrawler.settings")
     assert loaded.getbool("ROBOTSTXT_OBEY") and loaded.getfloat("DOWNLOAD_DELAY") == 2
+
+
+# --- the settings file shape (Prompt 14: contact_email, markers can only be added to) ------------
+
+
+def write(tmp_path, text: str):
+    f = tmp_path / "settings.yaml"
+    f.write_text(text, encoding="utf-8")
+    return f
+
+
+def test_contact_email_is_accepted_as_the_contact(tmp_path) -> None:
+    cfg = load_config(write(tmp_path, "crawler:\n  contact_email: team@tvscredit.example\n"))
+    assert cfg.contact == "team@tvscredit.example" and not cfg.contact_is_placeholder
+
+
+@pytest.mark.parametrize("contact", ["TODO_compliance_contact@tvscredit.com", "x@example.invalid"])
+def test_placeholder_contacts_are_recognised(tmp_path, contact) -> None:
+    assert load_config(
+        write(tmp_path, f"crawler:\n  contact_email: {contact}\n")
+    ).contact_is_placeholder
+
+
+def test_a_shorter_marker_list_never_switches_block_detection_off(tmp_path) -> None:
+    cfg = load_config(
+        write(tmp_path, "crawler:\n  contact: a@b.c\n  block_markers: ['only this']\n")
+    )
+    assert "only this" in cfg.block_markers
+    assert {"captcha", "g-recaptcha", "just a moment...", "access denied"} <= set(cfg.block_markers)
+    assert "/login" in cfg.login_url_markers and 403 in cfg.block_status_codes
+
+
+def test_a_live_request_is_refused_while_the_contact_is_a_placeholder(
+    tmp_path, monkeypatch
+) -> None:
+    from types import SimpleNamespace
+
+    from scrapy import Request
+    from scrapy.exceptions import IgnoreRequest
+
+    from regcrawler.middlewares import BlockDetectionMiddleware
+
+    monkeypatch.setenv(
+        "REGCRAWLER_SETTINGS_FILE",
+        str(write(tmp_path, "crawler:\n  contact_email: TODO_compliance_contact@x.com\n")),
+    )
+    mw = BlockDetectionMiddleware(SimpleNamespace(spider=None))  # built like Scrapy builds it
+    with pytest.raises(IgnoreRequest, match="placeholder"):
+        mw.process_request(Request("https://rbi.org.in/notifications"))
+    assert mw.process_request(Request("file:///tmp/saved.xml")) is None  # offline runs are fine

@@ -186,11 +186,11 @@ def accept_and_draft(client) -> None:
     client.get(f"{API}/daily-update/preview", params={"cycle": EOD})  # builds the draft
 
 
-def test_iors_chain_has_six_steps_with_working_links(client) -> None:
+def test_iors_chain_has_seven_steps_with_working_links(client) -> None:
     accept_and_draft(client)
     trail = client.get(f"{API}/history/{IORS}/trail").json()
     steps = trail["steps"]
-    assert [s["number"] for s in steps] == [1, 2, 3, 4, 5, 6]
+    assert [s["number"] for s in steps] == [1, 2, 3, 4, 5, 6, 7]
     assert [s["kind"] for s in steps] == [
         "email",
         "decision",
@@ -198,8 +198,10 @@ def test_iors_chain_has_six_steps_with_working_links(client) -> None:
         "change",
         "snapshot",
         "source_config",
+        "agent",
     ]
-    assert all(s["present"] for s in steps)
+    assert all(s["present"] for s in steps[:6])
+    assert not steps[6]["present"] and "Luna" in steps[6]["text"]  # Luna was off for this item
     assert steps[0]["badge"]["label"] == "Draft" and "row" in steps[0]["text"]
     assert "Divya G." in steps[1]["text"] and steps[1]["note"].startswith("No pre-filled")
     assert steps[2]["hashes"][0]["sha256"] and steps[3]["badge"]["label"] == "Modified"
@@ -217,10 +219,10 @@ def test_iors_chain_has_six_steps_with_working_links(client) -> None:
     }
 
 
-def test_chain_lists_all_six_steps_even_before_review(client) -> None:
+def test_chain_lists_all_steps_even_before_review(client) -> None:
     steps = client.get(f"{API}/history/{IORS}/trail").json()["steps"]
-    assert len(steps) == 6 and not steps[0]["present"] and not steps[1]["present"]
-    assert all(s["present"] for s in steps[2:])
+    assert len(steps) == 7 and not steps[0]["present"] and not steps[1]["present"]
+    assert all(s["present"] for s in steps[2:6]) and not steps[6]["present"]
     assert client.get(f"{API}/history/nope/trail").status_code == 404
 
 
@@ -251,7 +253,7 @@ def test_trail_exports_to_csv(client) -> None:
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
     assert "trail-tvsc-reg-2026-000214.csv" in r.headers["content-disposition"]
     rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
-    assert rows[0][:3] == ["Step", "Stage", "What happened"] and len(rows) == 7
+    assert rows[0][:3] == ["Step", "Stage", "What happened"] and len(rows) == 8
     assert [row[1] for row in rows[1:]] == [
         "email",
         "decision",
@@ -259,6 +261,7 @@ def test_trail_exports_to_csv(client) -> None:
         "change",
         "snapshot",
         "source_config",
+        "agent",
     ]
     assert any(len(row[6]) >= 64 for row in rows[1:])  # SHA-256 values are in the export
     assert client.get(f"{API}/history/nope/trail.csv").status_code == 404
