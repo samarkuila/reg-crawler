@@ -15,6 +15,7 @@ class ChannelState:
     snapshot_id: str | None = None
     items_found: int = 0
     attempted: bool = False
+    empty_is_ok: bool = False  # a diff source: "nothing changed" is a normal result, not ZERO_ITEMS
 
 
 class CheckTracker:
@@ -47,6 +48,12 @@ class CheckTracker:
             state.status = CheckStatus.FAILED
             state.error_detail = detail
             state.http_status = http_status
+
+    def note(self, channel: CheckChannel, text: str) -> None:
+        """A remark kept on an otherwise healthy check (for example "baseline stored")."""
+        state = self.state(channel)
+        if state.status is None:
+            state.error_detail = f"{state.error_detail}; {text}" if state.error_detail else text
 
     def parse_error(self, channel: CheckChannel, detail: str) -> None:
         state = self.state(channel)
