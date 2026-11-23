@@ -1,0 +1,100 @@
+/* Design tokens — Regulatory Monitor. Values taken from docs/ui-mockups and CLAUDE.md "UI rules".
+   No component styles here; see components.css. */
+
+/* Self-hosted Jost (SIL OFL 1.1, see ../fonts/OFL.txt). No CDN at runtime. */
+@font-face{font-family:"Jost";font-style:normal;font-weight:400;font-display:swap;
+  src:url("../fonts/jost-latin-ext-400.woff2") format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Jost";font-style:normal;font-weight:400;font-display:swap;
+  src:url("../fonts/jost-latin-400.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Jost";font-style:normal;font-weight:500;font-display:swap;
+  src:url("../fonts/jost-latin-ext-500.woff2") format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Jost";font-style:normal;font-weight:500;font-display:swap;
+  src:url("../fonts/jost-latin-500.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Jost";font-style:normal;font-weight:600;font-display:swap;
+  src:url("../fonts/jost-latin-ext-600.woff2") format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Jost";font-style:normal;font-weight:600;font-display:swap;
+  src:url("../fonts/jost-latin-600.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+:root{
+  /* Brand */
+  --c-blue:#114984;          /* Dark Blue */
+  --c-blue-hover:#0B3260;
+  --c-blue-tint:#E8F0FA;     /* nav .on, badge new */
+  --c-blue-wash:#F2F7FD;     /* selected row / pill */
+  --c-blue-line:#B9C7DA;     /* outline button border */
+  --c-blue-soft:#C9D8EA;     /* dashed logo outline on blue */
+  --c-green:#0E8943;         /* Emerald Green: header underline, non-text use */
+  --c-green-strong:#0C7C3B;  /* Emerald Green, darkened to 5.3:1 with white text (WCAG AA) */
+
+  /* Greys */
+  --c-grey-900:#252728;
+  --c-grey-800:#3A3D40;
+  --c-grey-700:#45484C;
+  --c-grey-600:#646569;
+  --c-grey-100:#EEF0F3;
+  --c-grey-50:#F1F4F8;
+  --c-grey-25:#FAFBFC;
+
+  /* Surfaces and lines */
+  --c-bg:#F5F7FA;
+  --c-surface:#FFFFFF;
+  --c-border:#E3E7ED;
+  --c-border-row:#EDF0F4;
+  --c-border-input:#CBD3DE;
+  --c-on-brand:#FFFFFF;
+  --c-header-text-soft:#DCE6F2;
+  --c-focus:#1F5FD6;
+
+  /* Status legend (separate tokens; dots and pills) */
+  --st-not-applicable:#808080;
+  --st-action-over:#0B8A3E;
+  --st-in-progress:#1F5FD6;
+  --st-not-as-per-plan:#D93025;
+  --st-yet-to-start:#F2B200;
+
+  /* Badge pairs (background / text) */
+  --b-new-bg:#E8F0FA;  --b-new-fg:#114984;
+  --b-mod-bg:#FFF4D6;  --b-mod-fg:#6B4A00;
+  --b-back-bg:#EFE9FA; --b-back-fg:#4B2E83;
+  --b-urg-bg:#FDECEA;  --b-urg-fg:#A11B12;
+  --b-ok-bg:#E6F4EC;   --b-ok-fg:#0A6B34;
+  --b-grey-bg:#EEF0F3; --b-grey-fg:#45484C;
+
+  /* Danger */
+  --c-danger:#A11B12;
+  --c-danger-line:#F0B9B3;
+  --c-danger-bg:#FDECEA;
+  --c-danger-ink:#5E1009;
+
+  /* Spacing, 4px scale (+ half steps the mockups use) */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-7:28px; --sp-8:32px; --sp-10:40px;
+  --sp-1h:6px; --sp-2h:10px; --sp-3h:14px; --sp-4h:18px;
+
+  /* Radius */
+  --radius-control:6px;
+  --radius-card:8px;
+  --radius-pill:999px;
+  --radius-sm:4px;
+
+  /* Typography */
+  --font-sans:"Jost","Segoe UI",Arial,sans-serif;
+  --font-mono:Consolas,"Courier New",monospace;
+  --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-14:14px; --fs-15:15px;
+  --fs-17:17px; --fs-18:18px; --fs-19:19px; --fs-28:28px;
+  --fw-regular:400; --fw-medium:500; --fw-semibold:600;
+
+  /* Sizing */
+  --touch-min:44px;
+  --control-sm:40px;
+  --nav-width:220px;
+
+  /* Elevation (overlays only) */
+  --shadow-overlay:0 8px 24px rgba(17,73,132,.18);
+  --scrim:rgba(37,39,40,.5);
+}

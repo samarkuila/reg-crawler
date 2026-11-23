@@ -14,7 +14,7 @@ Planning is complete (brief, PRD, tech stack, architecture, component architectu
 | # | Milestone | Planned | Status | Notes |
 |---|---|---|---|---|
 | M0 | Specs & setup | 21–23.11 | 🟢 Docs done · 🟢 Prompt 0 scaffold (23.11) | Runs on existing venv + pip (Python 3.14); uv/GNU make not installed — see decision 23.11 D11 |
-| M1 | UI on mock data (Prompts 1–6) | 24–25.11 | ⚪ Not started | Mockups approved |
+| M1 | UI on mock data (Prompts 1–6) | 24–25.11 | 🟡 In progress (design system done; browser visual check pending) | Mockups approved |
 | M2 | Database (Prompts 7–8) | 26.11 | ⚪ Not started | |
 | M3 | Crawler wave 1 (Prompts 9–11) | 26–27.11 | ⚪ Not started | Needs outbound internet |
 | M4 | Detection & run control (Prompts 12–13) | 28.11 | ⚪ Not started | |

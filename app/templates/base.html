@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Regulatory Monitor{% endblock %} – Regulatory Monitor</title>
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/components.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+{#- Page routes pass `active_nav` (review|health|email|history|sources|settings|audit), `cycles`, `current_user`. -#}
+{%- set nav_main = [
+  ('review', '/review', 'Daily review'),
+  ('health', '/health', 'Source health'),
+  ('email', '/email', 'Email preview'),
+  ('history', '/history', 'Item history'),
+] -%}
+{%- set nav_admin = [
+  ('sources', '/sources', 'Sources'),
+  ('settings', '/settings', 'Settings'),
+  ('audit', '/audit', 'Audit log'),
+] -%}
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      {# Placeholder only. Replace with the official TVS Credit logo file supplied by Brand. #}
+      <img class="brand-logo" src="/static/img/logo-placeholder.svg" width="120" height="36"
+           alt="Replace with official TVS Credit logo">
+      <div class="brand-name">Regulatory Monitor</div>
+      <span class="b b-poc">POC</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="header-field">
+      <label for="cycle-select">Cycle</label>
+      <select id="cycle-select" class="control-sm" data-role="cycle-select">
+        {%- for c in cycles|default([]) %}
+        <option value="{{ c.id }}"{% if c.selected %} selected{% endif %}>{{ c.label }}</option>
+        {%- else %}
+        <option value="">No cycle loaded</option>
+        {%- endfor %}
+      </select>
+    </div>
+    <button type="button" class="btn btn-g" id="run-now" data-action="run-now">Run now</button>
+    <div class="app-user" data-role="current-user">{{ current_user|default('Not signed in') }}</div>
+  </header>
+  <div class="app-body">
+    <nav class="nav" aria-label="Main">
+      {%- for key, href, label in nav_main %}
+      <a href="{{ href }}"{% if active_nav == key %} class="on" aria-current="page"{% endif %}>{{ label }}</a>
+      {%- endfor %}
+      <div class="nav-label">Admin</div>
+      {%- for key, href, label in nav_admin %}
+      <a href="{{ href }}"{% if active_nav == key %} class="on" aria-current="page"{% endif %}>{{ label }}</a>
+      {%- endfor %}
+    </nav>
+    <main class="main" id="main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

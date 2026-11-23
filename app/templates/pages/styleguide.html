@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Style guide{% endblock %}
+
+{% macro swatch(name, token) -%}
+<div class="sg-item"><span class="sg-swatch" style="--sw:var({{ token }})" role="img" aria-label="{{ name }} colour swatch"></span><span class="fw-500">{{ name }}</span><code>{{ token }}</code></div>
+{%- endmacro %}
+
+{% block content %}
+<div>
+  <h1 class="page-title">Style guide</h1>
+  <p class="page-sub muted">Every shared component, as used on the other pages. <span class="b b-grey">Sample data</span></p>
+</div>
+
+<section class="card pad-card stack" aria-labelledby="sg-colours">
+  <h2 class="section-title" id="sg-colours">Colour tokens</h2>
+  <div class="sg-grid">
+    {{ swatch('Dark Blue', '--c-blue') }}
+    {{ swatch('Emerald Green', '--c-green') }}
+    {{ swatch('Green (text use)', '--c-green-strong') }}
+    {{ swatch('Grey 900', '--c-grey-900') }}
+    {{ swatch('Grey 600', '--c-grey-600') }}
+    {{ swatch('Page background', '--c-bg') }}
+    {{ swatch('Border', '--c-border') }}
+  </div>
+  <h3 class="section-title-sm">Status legend</h3>
+  <div class="sg-grid">
+    {{ swatch('Not applicable', '--st-not-applicable') }}
+    {{ swatch('Action over', '--st-action-over') }}
+    {{ swatch('In progress', '--st-in-progress') }}
+    {{ swatch('Not as per plan', '--st-not-as-per-plan') }}
+    {{ swatch('Yet to start', '--st-yet-to-start') }}
+  </div>
+</section>
+
+<section class="card pad-card stack" aria-labelledby="sg-type">
+  <h2 class="section-title" id="sg-type">Typography</h2>
+  <h1 class="page-title">Page title, 28 medium</h1>
+  <h2 class="section-title">Section title, 18 medium</h2>
+  <p class="text-15">Body text, 15. Plain language, sentence case, dates as DD.MM.YYYY.</p>
+  <p class="text-14">Table and form text, 14.</p>
+  <p class="text-13 muted">Helper text, 13, grey 600.</p>
+  <p class="text-14"><a href="#sg-type">A link</a> · <code>code sample</code></p>
+</section>
+
+<section class="card pad-card stack" aria-labelledby="sg-buttons">
+  <h2 class="section-title" id="sg-buttons">Buttons</h2>
+  <div class="row">
+    <button type="button" class="btn btn-p">Primary</button>
+    <button type="button" class="btn btn-g">Accept</button>
+    <button type="button" class="btn btn-o">Outline</button>
+    <button type="button" class="btn btn-d">Dismiss</button>
+    <a class="btn btn-o" href="#sg-buttons">Link button</a>
+    <button type="button" class="btn btn-p" disabled>Disabled</button>
+    <button type="button" class="btn btn-o btn-icon" aria-label="Close panel">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</section>
+
+<section class="card pad-card stack" aria-labelledby="sg-badges">
+  <h2 class="section-title" id="sg-badges">Badges and status dots</h2>
+  <div class="row">
+    <span class="b b-new">New</span><span class="b b-mod">Modified</span><span class="b b-back">Backdated</span>
+    <span class="b b-urg">Urgent</span><span class="b b-ok">Decided</span><span class="b b-grey">Pending</span>
+    <span class="b b-poc">POC</span>
+  </div>
+  <div class="row gap-4">
+    <span class="row gap-1h"><span class="dot dot-na"></span>Not applicable</span>
+    <span class="row gap-1h"><span class="dot dot-done"></span>Action over</span>
+    <span class="row gap-1h"><span class="dot dot-progress"></span>In progress</span>
+    <span class="row gap-1h"><span class="dot dot-late"></span>Not as per plan</span>
+    <span class="row gap-1h"><span class="dot dot-todo"></span>Yet to start</span>
+  </div>
+</section>
+
+<section aria-label="Count tiles" class="counts">
+  <div class="card count"><div class="count-label">New</div><div class="count-value count-new">7</div></div>
+  <div class="card count"><div class="count-label">Modified</div><div class="count-value">1</div></div>
+  <div class="card count"><div class="count-label">Backdated</div><div class="count-value count-back">1</div></div>
+  <div class="card count"><div class="count-label">Urgent</div><div class="count-value count-urg">1</div></div>
+  <div class="card count"><div class="count-label">Needs manual fetch</div><div class="count-value count-mod">1</div></div>
+  <div class="card count"><div class="count-label">Decided</div><div class="count-value count-ok">3 <small>of 11</small></div></div>
+</section>
+
+<section class="card pad-card stack" aria-labelledby="sg-alert">
+  <h2 class="section-title" id="sg-alert">Alert strip</h2>
+  <div class="alert">
+    <span class="b b-urg">Blocked</span>
+    <div class="alert-body"><strong>eGazette · Recent extraordinary gazettes</strong> — site showed a verification page. Not retried. Please check it in your browser.</div>
+    <button type="button" class="btn btn-d">Mark checked manually</button>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="sg-table">
+  <div class="card-head">
+    <h2 class="section-title" id="sg-table">Table</h2>
+    <div class="row">
+      <label for="sg-auth" class="visually-hidden">Authority</label>
+      <select id="sg-auth" class="control-sm"><option>All authorities</option><option>RBI</option><option>UNSC</option></select>
+      <label for="sg-q" class="visually-hidden">Search</label>
+      <input id="sg-q" class="control-sm control-search" placeholder="Search titles">
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Item</th><th scope="col">Authority</th><th scope="col">Date shown</th><th scope="col">Channel</th><th scope="col">Relevance</th><th scope="col">State</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="cell-stack"><div class="cell-badges"><span class="b b-urg">Urgent</span><span class="b b-mod">Amended</span></div><a href="#sg-table">UN sanctions list – one entry amended (alias added)</a></div></td>
+          <td>UNSC</td><td>19.11.2026</td><td><span class="b b-grey">XML</span></td>
+          <td><div class="text-13">High</div><div class="meter meter-urg" style="--pct:90%"></div></td>
+          <td><span class="b b-grey">Pending</span></td>
+        </tr>
+        <tr class="is-selected">
+          <td><div class="cell-stack"><div class="cell-badges"><span class="b b-mod">Modified</span></div><a href="#sg-table" class="fw-500">Inter-operable Regulatory Sandbox: IoRS – FAQs</a><span class="muted text-13">Mentions regulated entities · FAQ update</span></div></td>
+          <td>RBI</td><td>17.11.2026</td><td><span class="b b-grey">RSS + HTML</span></td>
+          <td><div class="text-13">High</div><div class="meter" style="--pct:82%"></div></td>
+          <td><span class="b b-new">In review</span></td>
+        </tr>
+        <tr>
+          <td><div class="cell-stack"><div class="cell-badges"><span class="b b-back">Backdated</span></div><a href="#sg-table">Notification on NBFC lending practices (sample)</a><span class="muted text-13">Issued 19.11.2026 · published 20.11.2026</span></div></td>
+          <td>RBI</td><td>19.11.2026</td><td><span class="b b-grey">RSS + HTML</span></td>
+          <td><div class="text-13">Medium</div><div class="meter" style="--pct:58%"></div></td>
+          <td><span class="b b-ok">Decided</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="row row-start gap-5">
+  <section class="card pad-card stack grow basis-420" aria-labelledby="sg-forms">
+    <h2 class="section-title" id="sg-forms">Form controls</h2>
+    <form class="form" data-sg="form">
+      <div class="field"><label for="sg-ref">Reference No. and date</label><input id="sg-ref" value="IoRS – FAQs · Date: 17.11.2026 (Updated)"></div>
+      <div class="form-grid-2">
+        <div class="field"><label for="sg-app">Applicability</label><select id="sg-app"><option>Yes</option><option>No</option><option>TBC</option></select></div>
+        <div class="field"><label for="sg-err">Effective date</label><input id="sg-err" value="31.02.2026" aria-invalid="true" aria-describedby="sg-err-msg"><span class="field-error" id="sg-err-msg">Enter a real date as DD.MM.YYYY.</span></div>
+      </div>
+      <fieldset>
+        <legend>Status</legend>
+        <div class="pill-row">
+          <label class="pill"><input type="radio" name="sg-st"><span class="dot dot-na"></span>Not applicable</label>
+          <label class="pill"><input type="radio" name="sg-st"><span class="dot dot-done"></span>Action over</label>
+          <label class="pill"><input type="radio" name="sg-st"><span class="dot dot-progress"></span>In progress</label>
+          <label class="pill"><input type="radio" name="sg-st"><span class="dot dot-late"></span>Not as per plan</label>
+          <label class="pill"><input type="radio" name="sg-st" checked><span class="dot dot-todo"></span>Yet to start</label>
+        </div>
+      </fieldset>
+      <div class="field"><label for="sg-imp">Impact on TVSCS</label><textarea id="sg-imp" rows="3">The updated FAQs explain the Inter-operable Regulatory Sandbox.</textarea></div>
+      <label class="check"><input type="checkbox" checked> Include in today’s update</label>
+    </form>
+  </section>
+
+  <aside class="card drawer grow basis-380" aria-label="Review item">
+    <div class="drawer-head">
+      <div><div class="muted text-13">Reviewing · TVSC-REG-2026-000214</div><h2 class="drawer-title">Inter-operable Regulatory Sandbox: IoRS – FAQs</h2></div>
+      <button type="button" class="btn btn-o btn-icon" aria-label="Close panel"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="drawer-body form">
+      <div class="evidence">
+        <div class="evidence-title">Source evidence</div>
+        <div>First seen 20.11.2026 19:31 · RSS + HTML · Modified</div>
+        <div>Snapshot SHA-256 3f9a…c21e · Document SHA-256 8b04…a7d2</div>
+        <a href="#sg-forms">Open full traceability</a>
+      </div>
+      <div class="drawer-actions">
+        <button type="button" class="btn btn-g btn-fill">Accept</button>
+        <button type="button" class="btn btn-o btn-fill">Save</button>
+        <button type="button" class="btn btn-d btn-fill">Dismiss</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<section class="card pad-card stack" aria-labelledby="sg-overlays">
+  <h2 class="section-title" id="sg-overlays">Toast, overlay drawer and modal</h2>
+  <p class="text-14 muted">These are created by <code>ui.js</code>. Use the buttons to try them.</p>
+  <div class="row">
+    <button type="button" class="btn btn-o" data-sg="toast-info">Info toast</button>
+    <button type="button" class="btn btn-o" data-sg="toast-ok">Success toast</button>
+    <button type="button" class="btn btn-o" data-sg="toast-err">Error toast</button>
+    <button type="button" class="btn btn-o" data-sg="api-error">API error toast</button>
+    <button type="button" class="btn btn-o" data-sg="drawer">Open drawer</button>
+    <button type="button" class="btn btn-o" data-sg="modal">Open modal</button>
+  </div>
+  <p class="text-14" data-sg="out" aria-live="polite">Date helper: <span data-sg="date"></span> · escapeHtml: <code data-sg="escaped"></code></p>
+</section>
+
+<div class="row row-start gap-5">
+  <section class="card grow basis-300" aria-labelledby="sg-empty">
+    <div class="empty">
+      <h2 class="empty-title" id="sg-empty">No items for this cycle</h2>
+      <p class="empty-text">Nothing was detected in this cycle. Check source health, or choose another cycle.</p>
+      <a class="btn btn-o" href="/health">View source health</a>
+    </div>
+  </section>
+  <section class="card pad-card stack grow basis-300" aria-labelledby="sg-skel" aria-busy="true">
+    <h2 class="section-title" id="sg-skel">Loading skeleton</h2>
+    <span class="skeleton skeleton-title"></span>
+    <span class="skeleton"></span>
+    <span class="skeleton"></span>
+    <span class="skeleton skeleton-short"></span>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/styleguide.js"></script>
+{% endblock %}
