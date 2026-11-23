@@ -1,6 +1,9 @@
 # Windows equivalent of the Makefile (GNU make is not required on Windows).
 # Usage: .\tasks.ps1 <dev|test|lint|migrate|seed-demo|crawl|probe|demo>
-param([Parameter(Position = 0)][string]$Target = "help")
+param(
+    [Parameter(Position = 0)][string]$Target = "help",
+    [Parameter(ValueFromRemainingArguments = $true)]$Rest
+)
 
 $py = if ($env:PY) { $env:PY } else { "python" }
 
@@ -9,7 +12,7 @@ switch ($Target) {
     "test"      { & $py -m pytest }
     "lint"      { & $py -m ruff check . }
     "migrate"   { & $py -m alembic upgrade head }
-    "seed-demo" { Write-Host "not implemented until Prompt 8" }
+    "seed-demo" { & $py -m app.cli seed-demo @Rest }
     "crawl"     { Write-Host "not implemented until Prompt 13" }
     "probe"     { Write-Host "not implemented until Prompt 14" }
     "demo"      { Write-Host "not implemented until Prompt 15" }

@@ -75,7 +75,7 @@ ARCHITECTURE = {
 }
 # "Additions made in M1" (architecture section 4), which the SQL models must carry.
 M1_ADDITIONS = {
-    "source": {"planned"},
+    "source": {"planned", "position"},
     "source_version": {"decided_at", "reject_reason"},
     "regulatory_item": {"summary"},
     "document": {"filename"},

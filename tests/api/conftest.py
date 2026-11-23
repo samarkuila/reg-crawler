@@ -1,21 +1,31 @@
-"""API test setup: every test gets a fresh, seeded in-memory repository (no network, no files)."""
+"""API test setup: every test gets a fresh, seeded repository on each backend (no network)."""
+
+import shutil
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import USER_COOKIE, get_services, reset_services
 from app.main import app
+from tests.conftest import BACKENDS
 
 DIVYA, GEORGE, SAMARENDRA, AUDIT = "u-divya", "u-george", "u-samarendra", "u-audit"
 EOD = "2026-11-20-EOD"
 EGAZETTE_CHECK = "chk-2026-11-20-eod-egazette-html"
 
 
-@pytest.fixture(autouse=True)
-def fresh_repo(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("REPO_BACKEND", "memory")
+@pytest.fixture(autouse=True, params=BACKENDS)
+def fresh_repo(request, monkeypatch: pytest.MonkeyPatch, tmp_path, sql_template) -> str:
+    """Every API test runs twice: on the in-memory repository and on a fresh SQLite copy."""
+    if request.param == "sql":
+        folder = tmp_path / "sql"
+        shutil.copytree(sql_template, folder)
+        monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(folder / 'reg_monitor.db').as_posix()}")
+        monkeypatch.setenv("FILES_ROOT", str(folder / "files"))
+    monkeypatch.setenv("REPO_BACKEND", request.param)
     reset_services()
-    yield
+    yield request.param
+    get_services().repo = None  # drop the connection to the temporary database
     reset_services()
 
 

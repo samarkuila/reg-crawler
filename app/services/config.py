@@ -121,7 +121,11 @@ class ConfigService:
         can_decide, note = self._decision_rights(user, pending.requested_by if pending else None)
         return SourceView(
             source=source,
-            how_we_read_it=_HOW[source.type],
+            how_we_read_it=(
+                _HOW[SourceType.RSS]
+                if source.rss_url and source.type == SourceType.HTML_LIST
+                else _HOW[source.type]
+            ),
             status_label=label,
             pending_version=pending,
             pending_changes=readable.diff_fields(pending.before, pending.after) if pending else [],

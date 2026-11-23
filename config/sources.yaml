@@ -1,2 +1,181 @@
-# Source register — populated in Prompt 8 (format: docs/architecture.md §6).
-[]
+# Source register (FR-29, FR-30). Format: docs/architecture.md section 6.
+# Import with:  python -m app.cli import-sources config/sources.yaml --actor "<name>"
+# Imported sources are PENDING until a different person approves them on the Sources page.
+#
+# Selectors are PLACEHOLDERS until Prompt 11 ("selectors_confirmed: false"). Listing URLs marked
+# "confirm in probe" are the expected pages; the probe (Prompt 14) checks each one.
+# Never solve or bypass a verification page: a blocked source is recorded and checked by hand.
+
+# ---------- RBI (every tab Compliance uses, FR-30) ----------
+- id: rbi-notifications
+  authority: RBI
+  page_name: Notifications
+  type: HTML_LIST
+  url: https://www.rbi.org.in/Scripts/NotificationUser.aspx   # confirm in probe
+  rss_url: https://rbi.org.in/notifications_rss.xml
+  adapter_config: &rbi_adapter
+    selectors: {row: "TODO-prompt-11", title: "TODO-prompt-11", link: "TODO-prompt-11", date: "TODO-prompt-11", ref_no_regex: "RBI/\\d{4}-\\d{2}/\\d+"}
+    date_format: "%b %d, %Y"
+    max_pages: 2
+    selectors_confirmed: false
+  include_keywords: &global_include [NBFC, non-banking, regulated entities, all lending institutions, KYC, AML, sanctions, FEMA, DPDP]
+  exclude_keywords: &global_exclude [auction, variable rate repo, money market operations, maintenance, downtime, marks obtained, vacancy, recruitment, tender, bid, procurement, citizenship, gross direct premium]
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+- id: rbi-press-releases
+  authority: RBI
+  page_name: Press Releases
+  type: HTML_LIST
+  url: https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx   # confirm in probe
+  rss_url: https://rbi.org.in/pressreleases_rss.xml
+  adapter_config: *rbi_adapter
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+- id: rbi-circulars
+  authority: RBI
+  page_name: Circulars
+  type: HTML_LIST
+  url: https://www.rbi.org.in/Scripts/BS_CircularIndexDisplay.aspx   # confirm in probe
+  adapter_config: *rbi_adapter
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+- id: rbi-master-directions
+  authority: RBI
+  page_name: Master Directions
+  type: HTML_LIST
+  url: https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx   # confirm in probe
+  adapter_config: *rbi_adapter
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+- id: rbi-master-circulars
+  authority: RBI
+  page_name: Master Circulars
+  type: HTML_LIST
+  url: https://www.rbi.org.in/Scripts/BS_ViewMasterCirculardetails.aspx   # confirm in probe
+  adapter_config: *rbi_adapter
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+# FAQs must include the Non-Banking section: the IoRS FAQ is our test case.
+- id: rbi-faqs
+  authority: RBI
+  page_name: FAQs
+  type: HTML_LIST
+  url: https://www.rbi.org.in/Scripts/FAQView.aspx   # confirm in probe
+  adapter_config:
+    selectors: {row: "TODO-prompt-11", title: "TODO-prompt-11", link: "TODO-prompt-11", date: "TODO-prompt-11", ref_no_regex: ""}
+    date_format: "%b %d, %Y"
+    sections: [Non-Banking]
+    selectors_confirmed: false
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+- id: rbi-whats-new
+  authority: RBI
+  page_name: Home / What's New
+  type: HTML_LIST
+  url: https://www.rbi.org.in/Scripts/WhatsNew.aspx   # confirm in probe
+  adapter_config: *rbi_adapter
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+# ---------- UNSC ----------
+- id: unsc-consolidated
+  authority: UNSC
+  page_name: Consolidated sanctions list
+  type: STRUCTURED_DATA
+  url: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+  adapter_config: {format: xml, check: hourly, selectors_confirmed: false}
+  include_keywords: []
+  exclude_keywords: []
+  priority: URGENT
+  requires_js: false
+  active: true
+
+# ---------- TRAI ----------
+- id: trai-press-releases
+  authority: TRAI
+  page_name: Press releases
+  type: HTML_LIST
+  url: https://trai.gov.in/notifications/press-release
+  adapter_config:
+    selectors: {row: "TODO-prompt-11", title: "TODO-prompt-11", link: "TODO-prompt-11", date: "TODO-prompt-11", ref_no_regex: ""}
+    date_format: "%d %b %Y"
+    selectors_confirmed: false
+  include_keywords: [regulation, direction, recommendation, consultation paper]
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+# ---------- IRDAI (policyholder.gov.in) ----------
+- id: irdai-circulars
+  authority: IRDAI
+  page_name: Circulars and guidelines
+  type: HTML_LIST
+  url: https://policyholder.gov.in/   # confirm the circulars page in probe
+  adapter_config:
+    selectors: {row: "TODO-prompt-11", title: "TODO-prompt-11", link: "TODO-prompt-11", date: "TODO-prompt-11", ref_no_regex: ""}
+    date_format: "%d-%m-%Y"
+    selectors_confirmed: false
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+# ---------- eGazette: recent extraordinary gazettes, never the search form ----------
+- id: egazette-extraordinary
+  authority: eGazette
+  page_name: Recent extraordinary gazettes
+  type: HTML_LIST
+  url: https://egazette.gov.in
+  adapter_config:
+    selectors: {row: "TODO-prompt-11", title: "TODO-prompt-11", link: "TODO-prompt-11", date: "TODO-prompt-11", ref_no_regex: ""}
+    date_format: "%d-%m-%Y"
+    ministries: [Finance, MSME, Communications, Telecommunications]
+    # Weekly gazettes ("multiple ministries") are always kept as candidates, never dropped by
+    # the ministry filter.
+    always_keep: ["multiple ministries"]
+    use_search_form: false
+    selectors_confirmed: false
+  include_keywords: *global_include
+  exclude_keywords: *global_exclude
+  priority: NORMAL
+  requires_js: false
+  active: true
+
+# ---------- Planned (V2): on Compliance's monitoring list, inactive, URL to be decided ----------
+- {id: uidai, authority: UIDAI, page_name: Circulars and notices, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: cersai, authority: CERSAI, page_name: Notices, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: ckyc, authority: CKYC, page_name: Notices, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: npci, authority: NPCI, page_name: NACH circulars, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: meity, authority: MeitY, page_name: Notifications, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: pib, authority: PIB, page_name: Press releases, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: fiu-ind, authority: FIU-IND, page_name: Circulars and guidelines, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: nfra, authority: NFRA, page_name: Notices, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: mha, authority: MHA, page_name: Notifications, type: HTML_LIST, url: TBD, planned: true, active: false}
+- {id: slbc, authority: SLBC, page_name: Meetings, type: HTML_LIST, url: TBD, planned: true, active: false}

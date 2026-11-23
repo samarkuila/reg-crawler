@@ -87,6 +87,8 @@ class Source(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=False)
     current_version: Mapped[int] = mapped_column(Integer, default=0)
     planned: Mapped[bool] = mapped_column(Boolean, default=False)  # (added)
+    # Register order (creation order). The SQL repository lists sources by this.
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # (added)
 
 
 class SourceVersion(Base):

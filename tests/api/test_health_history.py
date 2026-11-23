@@ -105,7 +105,10 @@ def test_stored_snapshot_is_served_as_text_after_its_hash_is_checked(client) -> 
 def test_tampered_stored_copy_is_refused(client) -> None:
     repo = get_services().repo
     snap = repo.get_snapshot("snap-2026-11-20-eod-rbi-rss")
-    repo._blobs[snap.sha256] = b"changed"  # noqa: SLF001 - simulate on-disk tampering
+    if hasattr(repo, "_blobs"):  # in-memory backend
+        repo._blobs[snap.sha256] = b"changed"  # noqa: SLF001 - simulate tampering
+    else:  # SQL backend: the stored file itself is changed on disk
+        repo._file(snap.path).write_bytes(b"changed")  # noqa: SLF001
     r = client.get(f"{API}/snapshots/{snap.id}/content")
     assert r.status_code == 409 and "SHA-256" in r.json()["detail"]
 

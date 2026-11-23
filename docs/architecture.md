@@ -217,6 +217,7 @@ reg-monitor/
 ```
 
 ### Example source configuration (`config/sources.yaml`)
+The real file is `config/sources.yaml` (Prompt 8). It stores the row/title/link/date selectors under `adapter_config.selectors` (the form on the Sources page writes the same shape), not flat as in the example below. Load it with `python -m app.cli import-sources config/sources.yaml --actor "<name>"`: it only proposes PENDING versions and is safe to run again.
 ```yaml
 - id: rbi-notifications
   authority: RBI

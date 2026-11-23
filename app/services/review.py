@@ -116,7 +116,7 @@ class ReviewService:
         run = self._repo.get_run(run_id)
         if run is None:
             raise NotFoundError(f"Run {run_id} not found")
-        checks = self._repo.list_source_checks(run_id)
+        checks = self._ordered_checks(run_id)
         active = {s.id for s in self._repo.list_sources() if s.active}
         done = {c.source_id for c in checks}
         return RunDetail(
@@ -124,6 +124,15 @@ class ReviewService:
             checks=[self.check_view(c) for c in checks],
             sources_total=len(active),
             sources_done=len(done & active),
+        )
+
+    def _ordered_checks(self, run_id: str) -> list[SourceCheck]:
+        """Checks in register order (then RSS, HTML, XML), whatever order the repository uses."""
+        position = {s.id: i for i, s in enumerate(self._repo.list_sources())}
+        channel = {"RSS": 0, "HTML": 1, "XML": 2}
+        return sorted(
+            self._repo.list_source_checks(run_id),
+            key=lambda c: (position.get(c.source_id, len(position)), channel[c.channel.value]),
         )
 
     def check_view(self, check: SourceCheck) -> SourceCheckView:
@@ -165,7 +174,7 @@ class ReviewService:
         if not runs:
             raise NotFoundError(f"No run found for cycle {ref.id}")
         run = runs[0]  # newest first
-        views = [self.check_view(c) for c in self._repo.list_source_checks(run.id)]
+        views = [self.check_view(c) for c in self._ordered_checks(run.id)]
         ok_sources, manual_sources = set(), set()
         for s in active:
             mine = [v for v in views if v.source_id == s.id]
