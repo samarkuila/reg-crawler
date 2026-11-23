@@ -256,6 +256,7 @@ class DailyUpdateRow(Model):
     item_id: str
     decision_id: str
     ref_no_and_date: str
+    date_note: str | None = None  # FR-33: shown under the reference when issue/publish dates differ
     authority: str
     guideline_title: str
     link: str

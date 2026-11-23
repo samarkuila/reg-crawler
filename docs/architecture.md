@@ -169,6 +169,7 @@ erDiagram
 | POST | `/daily-update/{id}/reorder` | Set S.No order |
 | POST | `/daily-update/{id}/approve` | Approve |
 | GET | `/daily-update/{id}/export.eml` · `/export.html` | Export draft |
+| GET | `/daily-update/cycle-export.csv?cycle=` | FR-32: every captured item of the cycle (incl. low relevance and dismissed), UTF-8 CSV for Excel, blank "Compliance marking" column |
 | GET/POST | `/sources`, `/sources/{id}/versions`, `/sources/{id}/versions/{v}/approve|reject` | Register + approvals |
 | GET | `/settings` · `/settings/{key}` | Settings (live value + any pending change) |
 | PUT | `/settings/{key}` | Propose a value → pending (maker) |

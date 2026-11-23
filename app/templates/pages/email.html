@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Email preview{% endblock %}
+
+{#- Page shell only (docs/ui-mockups/02-email-preview.html). email.js loads from /api/v1 and renders here. -#}
+{% block content %}
+<div class="row row-between row-end gap-3">
+  <div>
+    <h1 class="page-title">Email preview</h1>
+    <p class="page-sub muted" id="em-sub" aria-live="polite">Loading…</p>
+  </div>
+  <div class="row gap-2">
+    <a class="btn btn-o" id="em-xlsx" href="/api/v1/daily-update/cycle-export.csv">Export cycle to Excel</a>
+    <button type="button" class="btn btn-o" id="em-copy" disabled>Copy HTML</button>
+    <a class="btn btn-o" id="em-eml" href="#" aria-disabled="true" download>Download .eml</a>
+    <button type="button" class="btn btn-g" id="em-approve" disabled>Approve</button>
+  </div>
+</div>
+
+<div class="row row-start gap-5">
+  <aside class="em-side stack gap-4">
+    <section class="card pad-card stack gap-3" aria-label="Pre-send checks" id="em-checks">
+      <div class="skeleton skeleton-title"></div>
+    </section>
+
+    <section class="card pad-card stack gap-3" aria-label="Rows in this email">
+      <div class="row row-between">
+        <h2 class="section-title-sm">Rows (drag to reorder)</h2>
+        <span class="muted text-13" id="em-count"></span>
+      </div>
+      <ol class="em-rows" id="em-rows"></ol>
+      <p class="muted text-13" id="em-rows-hint">Drag a row, or use the arrow buttons, to change the S.No order.</p>
+    </section>
+
+    <section class="card pad-card stack gap-3" aria-label="Recipients">
+      <h2 class="section-title-sm">Subject and recipients</h2>
+      <div class="field"><label for="e-sub">Subject</label><input id="e-sub" readonly></div>
+      <div class="field"><label for="e-to">To</label><input id="e-to" readonly></div>
+      <div class="field"><label for="e-cc">CC (added from SME routing)</label><input id="e-cc" readonly></div>
+      <p class="muted text-13">The system never sends email. Download the draft and send it from Outlook. Wording and recipients are changed in Settings.</p>
+    </section>
+  </aside>
+
+  <section class="card em-preview" aria-label="Email preview">
+    <div class="em-preview-head muted text-13">Preview as it will look in Outlook</div>
+    {#- sandbox without scripts: the HTML is server-rendered, and nothing in it may run. -#}
+    <iframe id="em-frame" class="em-frame" title="Email preview" sandbox="allow-same-origin" srcdoc=""></iframe>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/email.js"></script>
+{% endblock %}

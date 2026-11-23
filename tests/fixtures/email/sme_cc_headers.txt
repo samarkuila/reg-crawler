@@ -1,0 +1,4 @@
+Subject: Daily Regulatory Update – 20.11.2026 (EOD)
+To: TVSCS Compliance team <tvscs-compliance@example.invalid>
+Cc: Treasury head <treasury-head@example.invalid>
+X-Unsent: 1

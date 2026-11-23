@@ -65,7 +65,7 @@ def index() -> RedirectResponse:
 
 
 # Screens that have their own template (the rest use the generic "not built yet" shell).
-PAGE_TEMPLATES: dict[str, str] = {"review": "pages/review.html"}
+PAGE_TEMPLATES: dict[str, str] = {"review": "pages/review.html", "email": "pages/email.html"}
 
 
 def _make_page(path: str) -> None:
