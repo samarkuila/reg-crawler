@@ -354,6 +354,7 @@ function panelHtml(detail) {
     `<div class="field"><label for="r-iss">Issue date</label><input id="r-iss" name="issue_date" value="${escapeHtml(issue)}" placeholder="DD.MM.YYYY" inputmode="numeric" aria-describedby="r-iss-err"><div class="field-error" id="r-iss-err" role="alert" hidden></div></div>` +
     `<div class="field"><label for="r-eff">Effective date</label><input id="r-eff" name="effective_date" value="${escapeHtml(effective)}" placeholder="DD.MM.YYYY" inputmode="numeric" aria-describedby="r-eff-err"><div class="field-error" id="r-eff-err" role="alert" hidden></div></div></div>` +
     (p.effective_date_rule ? `<div class="muted text-13">Effective date: ${escapeHtml(p.effective_date_rule)}</div>` : "") +
+    (p.applicability_hint ? `<div class="muted text-13">Suggested applicability: ${escapeHtml(p.applicability_hint.text)} (from “${escapeHtml(p.applicability_hint.phrase)}”). Please check; you decide.</div>` : "") +
     `<div class="field"><label for="r-link">Guidelines link</label><input id="r-link" value="${escapeHtml(i.canonical_url)}" readonly></div>` +
     `<fieldset><legend>Status</legend><div class="pill-row">${pills}</div></fieldset>` +
     `<div class="field"><label for="r-imp">Impact on TVSCS</label><textarea id="r-imp" name="impact_text" rows="5">${escapeHtml(impact)}</textarea></div>` +

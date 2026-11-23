@@ -261,6 +261,7 @@ class Document(Base):
     path: Mapped[str | None] = mapped_column(Text)
     mime: Mapped[str | None] = mapped_column(String(100))
     text_path: Mapped[str | None] = mapped_column(Text)
+    needs_ocr: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     fetch_status: Mapped[FetchStatus] = mapped_column(enum_column(FetchStatus, "document_status"))
     uploaded_by: Mapped[str | None] = mapped_column(String(100))
     fetched_at: Mapped[datetime | None] = mapped_column(TZDateTime)

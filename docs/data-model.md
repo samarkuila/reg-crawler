@@ -88,6 +88,7 @@ erDiagram
     text path
     string mime
     text text_path
+    bool needs_ocr
     enum fetch_status
     string uploaded_by
     datetime fetched_at
@@ -331,6 +332,7 @@ Every table and column in §4 exists. These differences are deliberate:
    `ref_no`, `displayed_date`, `raw_extra`, `fetched_at`). Architecture §3.1 says the pipelines write
    "raw ListingItems", but §4 had no table for them. They are not regulatory items: Detection
    (Prompt 12) reads them and decides what is new. Rows are only inserted by the crawler.
-8. **Relationship objects are not defined on the models.** Foreign keys and indexes are in place;
+8. **`document.needs_ocr`** (Prompt 12, migration `0004`): set when a stored PDF has almost no text layer (a scan), so a person knows the system could not read it. Added as a plain column, so the append-only triggers on `document` are unchanged.
+9. **Relationship objects are not defined on the models.** Foreign keys and indexes are in place;
    the SQL repository queries them directly. Adding ORM relationships later does not change the
    schema.

@@ -11,7 +11,7 @@ import threading
 import uuid
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -78,6 +78,7 @@ class MemoryRepository:
         self._settings: dict[str, Setting] = {}
         self._update_rows: dict[str, list[DailyUpdateItem]] = {}
         self._blobs: dict[str, bytes] = {}
+        self._texts: dict[str, str] = {}
 
     # --- internals ---------------------------------------------------------------------------
 
@@ -85,11 +86,13 @@ class MemoryRepository:
     def _txn(self) -> Iterator[None]:
         """All-or-nothing: restore the previous state if the block raises."""
         with self._lock:
-            backup = copy.deepcopy((self._s, self._settings, self._update_rows, self._blobs))
+            backup = copy.deepcopy(
+                (self._s, self._settings, self._update_rows, self._blobs, self._texts)
+            )
             try:
                 yield
             except BaseException:
-                self._s, self._settings, self._update_rows, self._blobs = backup
+                self._s, self._settings, self._update_rows, self._blobs, self._texts = backup
                 raise
 
     def _audit(
@@ -420,16 +423,79 @@ class MemoryRepository:
         return self._get("documents", document_id)
 
     def add_document(
-        self, doc: Document, content: bytes | None, new_state: ItemState | None, actor: str
+        self,
+        doc: Document,
+        content: bytes | None,
+        new_state: ItemState | None,
+        actor: str,
+        text: str | None = None,
     ) -> Document:
         with self._txn():
             self._s["documents"][doc.id] = doc.model_copy(deep=True)
             if content is not None and doc.sha256:
                 self._blobs[doc.sha256] = content
+            if text is not None and doc.text_path:
+                self._texts[doc.text_path] = text
             self._audit(actor, "document.added", "document", doc.id, None, _dump(doc))
             if new_state is not None:
                 self._set_state(doc.item_id, new_state, actor)
             return doc.model_copy(deep=True)
+
+    def read_text(self, document_id: str) -> str | None:
+        doc = self._s["documents"].get(document_id)
+        return None if doc is None or not doc.text_path else self._texts.get(doc.text_path)
+
+    def find_item_by_fingerprint(self, fingerprint: str) -> RegulatoryItem | None:
+        for item in self._s["items"].values():
+            if item.fingerprint == fingerprint:
+                return item.model_copy(deep=True)
+        return None
+
+    def save_detection(
+        self,
+        item: RegulatoryItem,
+        observations: list[ItemObservation],
+        is_new: bool,
+        actor: str,
+    ) -> RegulatoryItem:
+        with self._txn():
+            if is_new:
+                year = item.first_seen_at.year
+                prefix = f"TVSC-REG-{year:04d}-"
+                taken = [
+                    int(i.internal_ref[len(prefix) :])
+                    for i in self._s["items"].values()
+                    if i.internal_ref.startswith(prefix)
+                ]
+                item = item.model_copy(
+                    update={"internal_ref": f"{prefix}{max(taken, default=0) + 1:06d}"}
+                )
+                if any(i.fingerprint == item.fingerprint for i in self._s["items"].values()):
+                    raise ValueError(f"Item with fingerprint {item.fingerprint} already exists")
+                before = None
+            else:
+                before = _dump(self._s["items"][item.id])
+            self._s["items"][item.id] = item.model_copy(deep=True)
+            for obs in observations:
+                self._s["observations"][obs.id] = obs.model_copy(deep=True)
+            action = "regulatory_item.detected" if is_new else "regulatory_item.updated"
+            self._audit(actor, action, "regulatory_item", item.id, before, _dump(item))
+            return item.model_copy(deep=True)
+
+    def mark_items_seen(self, item_ids: list[str], seen_at: datetime, actor: str) -> None:
+        if not item_ids:
+            return
+        with self._txn():
+            for item_id in item_ids:
+                self._s["items"][item_id].last_seen_at = seen_at
+            self._audit(
+                actor,
+                "regulatory_items.seen",
+                "regulatory_item",
+                item_ids[0],
+                None,
+                {"count": len(item_ids), "seen_at": seen_at.isoformat()},
+            )
 
     def _set_state(self, item_id: str, state: ItemState, actor: str) -> None:
         item: RegulatoryItem = self._s["items"][item_id]

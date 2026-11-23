@@ -28,7 +28,7 @@ from sqlalchemy import JSON, Engine, and_, delete, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import models as m
-from app.db.refs import PREFIX
+from app.db.refs import PREFIX, next_internal_ref
 from app.db.session import make_session_factory, session_scope
 from app.schemas.api import CycleRef, ItemFilter
 from app.schemas.entities import (
@@ -629,16 +629,86 @@ class SqlRepository:
             return None if row is None else _to_entity(Document, row)
 
     def add_document(
-        self, doc: Document, content: bytes | None, new_state: ItemState | None, actor: str
+        self,
+        doc: Document,
+        content: bytes | None,
+        new_state: ItemState | None,
+        actor: str,
+        text: str | None = None,
     ) -> Document:
         with self._tx() as session:
             session.add(_to_row(m.Document, doc))
             if content is not None and doc.sha256 and doc.path:
                 self._write_once(doc.path, content)
+            if text is not None and doc.text_path:
+                self._write_once(doc.text_path, text.encode("utf-8"))
             self._audit(session, actor, "document.added", "document", doc.id, None, _dump(doc))
             if new_state is not None:
                 self._set_state(session, doc.item_id, new_state, actor)
             return doc.model_copy(deep=True)
+
+    def read_text(self, document_id: str) -> str | None:
+        with self._tx() as session:
+            row = session.get(m.Document, document_id)
+            relative = None if row is None else row.text_path
+        if not relative:
+            return None
+        path = self._file(relative)
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+
+    def find_item_by_fingerprint(self, fingerprint: str) -> RegulatoryItem | None:
+        with self._tx() as session:
+            row = session.scalars(
+                select(m.RegulatoryItem).where(m.RegulatoryItem.fingerprint == fingerprint)
+            ).first()
+            return None if row is None else _to_entity(RegulatoryItem, row)
+
+    def save_detection(
+        self,
+        item: RegulatoryItem,
+        observations: list[ItemObservation],
+        is_new: bool,
+        actor: str,
+    ) -> RegulatoryItem:
+        with self._tx() as session:
+            if is_new:
+                item = item.model_copy(
+                    update={"internal_ref": next_internal_ref(session, item.first_seen_at.year)}
+                )
+                session.add(_to_row(m.RegulatoryItem, item))
+                session.flush()  # the item row must exist before its observations
+                before = None
+            else:
+                row = session.get(m.RegulatoryItem, item.id)
+                if row is None:
+                    raise KeyError(item.id)
+                before = _dump(_to_entity(RegulatoryItem, row))
+                for name, value in _row_values(m.RegulatoryItem, item).items():
+                    if name not in ("id", "internal_ref", "fingerprint", "first_seen_run_id"):
+                        setattr(row, name, value)
+            for obs in observations:
+                session.add(_to_row(m.ItemObservation, obs))
+            action = "regulatory_item.detected" if is_new else "regulatory_item.updated"
+            self._audit(session, actor, action, "regulatory_item", item.id, before, _dump(item))
+            return item.model_copy(deep=True)
+
+    def mark_items_seen(self, item_ids: list[str], seen_at: datetime, actor: str) -> None:
+        if not item_ids:
+            return
+        with self._tx() as session:
+            for row in session.scalars(
+                select(m.RegulatoryItem).where(m.RegulatoryItem.id.in_(item_ids))
+            ):
+                row.last_seen_at = seen_at
+            self._audit(
+                session,
+                actor,
+                "regulatory_items.seen",
+                "regulatory_item",
+                item_ids[0],
+                None,
+                {"count": len(item_ids), "seen_at": seen_at.isoformat()},
+            )
 
     def _set_state(self, session: Session, item_id: str, state: ItemState, actor: str) -> None:
         row = session.get(m.RegulatoryItem, item_id)

@@ -184,6 +184,15 @@ class ItemListResponse(Model):
     items: list[ItemSummary]
 
 
+class ApplicabilitySuggestion(Model):
+    """A suggestion from the Entity Profile (FR-35). The reviewer decides."""
+
+    suggested: Applicability
+    text: str
+    phrase: str
+    profile_item: str
+
+
 class Prefill(Model):
     """Values the system proposes for the review form. Used to track fields the reviewer edits."""
 
@@ -194,6 +203,7 @@ class Prefill(Model):
     publish_date: date | None
     effective_date: date | None
     effective_date_rule: str | None
+    applicability_hint: ApplicabilitySuggestion | None = None
 
 
 class TraceStep(Model):

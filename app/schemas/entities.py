@@ -178,6 +178,7 @@ class Document(Entity):
     uploaded_by: str | None = None
     fetched_at: datetime | None = None
     filename: str | None = None  # (added) original name of a manual upload
+    needs_ocr: bool = False  # (added, Prompt 12) a scanned PDF: no usable text layer
 
 
 # --- Review and email ------------------------------------------------------------------------

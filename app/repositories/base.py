@@ -4,7 +4,7 @@ Every mutating method takes `actor` and records an AuditEvent in the same transa
 change. Snapshots, documents and audit events are append-only: there is no update/delete for them.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Protocol
 
 from app.schemas.api import CycleRef, ItemFilter
@@ -82,8 +82,23 @@ class Repository(Protocol):
     def list_documents(self, item_id: str) -> list[Document]: ...
     def get_document(self, document_id: str) -> Document | None: ...
     def add_document(
-        self, doc: Document, content: bytes | None, new_state: ItemState | None, actor: str
+        self,
+        doc: Document,
+        content: bytes | None,
+        new_state: ItemState | None,
+        actor: str,
+        text: str | None = None,
     ) -> Document: ...
+    def read_text(self, document_id: str) -> str | None: ...
+    def find_item_by_fingerprint(self, fingerprint: str) -> RegulatoryItem | None: ...
+    def save_detection(
+        self,
+        item: RegulatoryItem,
+        observations: list[ItemObservation],
+        is_new: bool,
+        actor: str,
+    ) -> RegulatoryItem: ...
+    def mark_items_seen(self, item_ids: list[str], seen_at: datetime, actor: str) -> None: ...
     def list_decisions(self, item_id: str) -> list[ReviewDecision]: ...
     def save_decisions(
         self, decisions: list[ReviewDecision], new_state: ItemState, actor: str

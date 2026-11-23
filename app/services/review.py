@@ -10,6 +10,7 @@ from datetime import date
 
 from app.repositories.base import Repository
 from app.schemas.api import (
+    ApplicabilitySuggestion,
     BulkDismissIn,
     BulkDismissOut,
     CycleRef,
@@ -57,6 +58,7 @@ from app.services.errors import (
 )
 from app.services.formatting import CYCLE_NAMES, fmt_date, fmt_time
 from app.services.permissions import REVIEW_ROLES, RUN_ROLES, require_role
+from app.services.prefill_rules import applicability_hint, effective_date
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 STATUS_LABELS = {
@@ -367,6 +369,15 @@ class ReviewService:
             raise NotFoundError(f"Item {item_id} not found")
         return item
 
+    def _document_text(self, item: RegulatoryItem) -> str | None:
+        """Text of the item's first stored document that has any (read-only)."""
+        for doc in self._repo.list_documents(item.id):
+            if doc.text_path:
+                text = self._repo.read_text(doc.id)
+                if text:
+                    return text
+        return None
+
     def _prefill(self, item: RegulatoryItem, source: Source, change: ChangeType | None) -> Prefill:
         issue = item.displayed_date
         publish = issue
@@ -381,15 +392,11 @@ class ReviewService:
             )
         if change == ChangeType.BACKDATED and publish != issue:
             ref += f" · Published on website: {fmt_date(publish)}"
-        if source.authority == "UNSC":
-            effective, rule = (
-                publish,
-                "UN notice: using the publish date unless the text says otherwise",
-            )
-        elif issue:
-            effective, rule = issue, "No effective date found: using the issue date"
-        else:
-            effective, rule = publish, "No effective date found: using the publish date"
+        text = self._document_text(item)
+        found = effective_date(text, issue, publish, source.authority)
+        effective, rule = found.value, found.rule
+        profile = self._repo.get_setting("entity-profile")
+        hint = applicability_hint(text, profile.value if profile else None)
         return Prefill(
             ref_no_and_date=ref,
             authority=source.authority,
@@ -398,6 +405,16 @@ class ReviewService:
             publish_date=publish,
             effective_date=effective,
             effective_date_rule=rule,
+            applicability_hint=(
+                ApplicabilitySuggestion(
+                    suggested=hint.suggested,
+                    text=hint.text,
+                    phrase=hint.phrase,
+                    profile_item=hint.profile_item,
+                )
+                if hint
+                else None
+            ),
         )
 
     def item_detail(self, item_id: str) -> ItemDetail:
