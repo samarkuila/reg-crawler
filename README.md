@@ -16,5 +16,5 @@ Note: the stack targets Python 3.12 + uv; this machine currently uses the venv's
 `dev` · `test` · `lint` · `migrate` · `seed-demo` · `crawl` · `probe` · `demo`
 (later targets are stubs until their prompts.)
 
-- Run: `.\tasks.ps1 dev` → http://localhost:8000/health
+- Run: `.\tasks.ps1 dev` → http://localhost:8000/api/v1/health (JSON) · API docs at http://localhost:8000/docs
 - Crawler check: `cd crawler; scrapy list`

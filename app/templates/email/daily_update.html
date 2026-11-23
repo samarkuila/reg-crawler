@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ subject }}</title></head>
+<body style="margin:0;padding:0;font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:14px;color:#1F1F1F;">
+{#- Outlook-safe: inline styles only, no external resources. Wording comes from the email template (Settings). -#}
+<p style="margin:0 0 14px 0;">{{ greeting }}</p>
+{%- if no_update %}
+<p style="margin:0 0 14px 0;">{{ no_update_text }}</p>
+{%- else %}
+<p style="margin:0 0 14px 0;">{{ intro }}</p>
+<table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;">
+<thead>
+<tr>
+{%- for head in ["S.No", "Reference No. and Date", "Authority", "Guidelines", "Applicability", "Effective Date", "Status", "Impact on TVSCS"] %}
+<th style="background:#114984;color:#FFFFFF;font-weight:600;font-size:13px;padding:8px;border:1px solid #9FB3CC;text-align:left;vertical-align:bottom;">{{ head }}</th>
+{%- endfor %}
+</tr>
+</thead>
+<tbody>
+{%- for row in rows %}
+<tr>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.serial_no }}</td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.ref_no_and_date }}</td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.authority }}</td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.guideline_title }}<br><a href="{{ row.link }}">{{ row.link_text }}</a></td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.applicability }}</td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.effective_date }}</td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;text-align:center;">
+{%- if row.status_hex %}<span style="color:{{ row.status_hex }};font-size:18px;" title="{{ row.status_label }}">&#9679;</span>{% endif -%}
+</td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.impact_text }}</td>
+</tr>
+{%- endfor %}
+</tbody>
+</table>
+{%- endif %}
+{%- for note in source_notes %}
+<p style="margin:14px 0 0 0;font-size:13px;">{{ note }}</p>
+{%- endfor %}
+<p style="margin:14px 0;font-style:italic;text-align:center;">{{ disclaimer }}</p>
+<p style="margin:0 0 14px 0;text-align:center;font-size:13px;">
+{%- for colour in legend %}
+<span style="color:{{ colour.hex }};font-size:16px;">&#9679;</span> {{ colour.label }}{% if not loop.last %} &nbsp;&nbsp; {% endif %}
+{%- endfor %}
+</p>
+<p style="margin:0;">{{ sign_off }}<br>{{ sender_name }}</p>
+</body>
+</html>

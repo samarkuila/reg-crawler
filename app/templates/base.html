@@ -43,7 +43,22 @@
       </select>
     </div>
     <button type="button" class="btn btn-g" id="run-now" data-action="run-now">Run now</button>
+    {#- POC only: pick who you are. V2 replaces this with Entra ID sign-in. Role checks run in the services. -#}
+    {%- if users %}
+    <form class="header-field" method="post" action="/switch-user" data-role="user-switcher">
+      <input type="hidden" name="next" value="{{ next_url|default('/review') }}">
+      <label for="user-select">User</label>
+      <select id="user-select" name="user" class="control-sm" data-role="user-select">
+        {%- for u in users %}
+        <option value="{{ u.id }}"{% if u.id == current_user_id %} selected{% endif %}>{{ u.name }} · {{ u.role.value|capitalize }}</option>
+        {%- endfor %}
+      </select>
+      <button type="submit" class="btn btn-o">Switch</button>
+      <span class="b b-poc" title="Proof-of-concept only. Not real sign-in.">POC only</span>
+    </form>
+    {%- else %}
     <div class="app-user" data-role="current-user">{{ current_user|default('Not signed in') }}</div>
+    {%- endif %}
   </header>
   <div class="app-body">
     <nav class="nav" aria-label="Main">
