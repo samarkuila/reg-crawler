@@ -14,7 +14,7 @@ Planning is complete (brief, PRD, tech stack, architecture, component architectu
 | # | Milestone | Planned | Status | Notes |
 |---|---|---|---|---|
 | M0 | Specs & setup | 21–23.11 | 🟢 Docs done · 🟢 Prompt 0 scaffold (23.11) | Runs on existing venv + pip (Python 3.14); uv/GNU make not installed — see decision 23.11 D11 |
-| M1 | UI on mock data (Prompts 1–6) | 24–25.11 | 🟡 In progress · Prompt 1 design system done (23.11) · Prompt 2 schemas, mock repository and API done (23.11) · Prompt 3 Daily review page built (23.11, awaiting checkpoint review) | Mockups approved. Open: /styleguide and the new header user switcher not yet visually checked in a browser against the mockups; official logo pending from Brand (placeholder in use) |
+| M1 | UI on mock data (Prompts 1–6) | 24–25.11 | 🟡 In progress · Prompt 1 design system done (23.11) · Prompt 2 schemas, mock repository and API done (23.11) · Prompt 3 Daily review page done (23.11) | Mockups approved. Open: /styleguide, the header user switcher and the Daily review page (incl. J/K/Enter/A/D/Esc keys) not yet visually checked in a browser against the mockups; official logo pending from Brand (placeholder in use) |
 | M2 | Database (Prompts 7–8) | 26.11 | ⚪ Not started | |
 | M3 | Crawler wave 1 (Prompts 9–11) | 26–27.11 | ⚪ Not started | Needs outbound internet |
 | M4 | Detection & run control (Prompts 12–13) | 28.11 | ⚪ Not started | |
