@@ -130,6 +130,17 @@ erDiagram
 | `app_user` | id, name, email, role (viewer/reviewer/approver/admin) |
 | `audit_event` | id, ts, actor, action, entity, entity_id, before (JSON), after (JSON) — **append-only** |
 
+**Additions made in M1 (mock API, 23.11.2026)** — needed by the review and approval flows; the SQL models (Prompt 7) must carry them:
+- `source.planned` (bool): on Compliance's monitoring list but not in the POC; always inactive.
+- `source_version.decided_at`, `reject_reason`.
+- `regulatory_item.summary`: one-line change summary (e.g. UNSC "alias added").
+- `document.filename`: original name of a manual upload.
+- `review_decision.is_draft`: "Save" keeps a draft; only Accept / Dismiss are final and can reach the email. `treatment` is empty only on a draft.
+- `daily_update.prepared_by` (list of names, used for approver ≠ preparer) and `exported_at`.
+- `setting.pending` (proposed value, requester, version): settings are versioned with maker–checker approval like sources.
+- Enum values not listed above: `treatment` = INFO_ONLY · OTHER_FUNCTION · FUTURE_POTENTIAL · IMPLEMENTATION_REQUIRED · NOT_RELEVANT; `applicability` = YES · NO · TBC; `status_colour` = NOT_APPLICABLE · ACTION_OVER · IN_PROGRESS · NOT_AS_PER_PLAN · YET_TO_START; `source_check.channel` = RSS · HTML · XML; `item.state` also has ENRICHED (Luna, §7a).
+- Cycle id on the wire: `YYYY-MM-DD-<CYCLE>`, e.g. `2026-11-20-EOD`.
+
 **Integrity:** triggers reject UPDATE/DELETE on `snapshot`, `document`, `audit_event`; files written once to `data/snapshots/{source}/{date}/{sha256}` and `data/documents/{internal_ref}/{sha256}.{ext}`.
 
 ### Fingerprint and change rules
@@ -159,10 +170,17 @@ erDiagram
 | POST | `/daily-update/{id}/approve` | Approve |
 | GET | `/daily-update/{id}/export.eml` · `/export.html` | Export draft |
 | GET/POST | `/sources`, `/sources/{id}/versions`, `/sources/{id}/versions/{v}/approve|reject` | Register + approvals |
-| GET/PUT | `/settings/{key}` | Versioned settings |
+| GET | `/settings` · `/settings/{key}` | Settings (live value + any pending change) |
+| PUT | `/settings/{key}` | Propose a value → pending (maker) |
+| POST | `/settings/{key}/approve` · `/reject` | Approver ≠ requester (checker) |
+| GET | `/sources/{id}/versions` | Version history with before/after |
 | GET | `/audit?entity=&actor=&from=&to=` · `/audit/export.csv` | Audit |
 
-Page routes (`/`, `/review`, `/health`, `/email`, `/history`, `/sources`, `/settings`, `/audit`, `/styleguide`) return Jinja2 shells; data loads via JS.
+Session helpers (POC): `GET /api/v1/me`, `GET /api/v1/users`, `GET /api/v1/health`; the header user switcher posts to `/switch-user` (cookie `poc_user`, hidden when `APP_ENV=prod`).
+Error mapping: 403 wrong role or same person, 404 unknown id, 409 wrong state (e.g. unchecked failed source), 422 invalid input, 501 `/crawl/run` until Prompt 13.
+Roles: reviewer/approver review and upload; admin/approver propose source and settings changes and test sources; only an approver approves, and never their own change or an update they prepared. Viewers read only.
+
+Page routes (`/`, `/review`, `/health` (the Source health screen; JSON liveness is `/api/v1/health`), `/email`, `/history`, `/sources`, `/settings`, `/audit`, `/styleguide`) return Jinja2 shells; data loads via JS.
 
 ---
 

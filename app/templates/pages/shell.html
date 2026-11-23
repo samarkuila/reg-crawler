@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div>
+  <h1 class="page-title">{{ title }}</h1>
+  <p class="page-sub muted">{{ lead }}</p>
+</div>
+{#- Page shell only. The screen's JS loads its data from /api/v1 and renders it into this container. -#}
+<section class="card pad-card" aria-label="{{ title }}" data-page="{{ page_key }}" id="page-root">
+  <div class="empty">
+    <div class="empty-title">This screen is not built yet</div>
+    <div class="empty-text">The data is already available from the API. See <a href="/docs">/docs</a>.</div>
+  </div>
+</section>
+{% endblock %}
