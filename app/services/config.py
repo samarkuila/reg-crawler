@@ -5,6 +5,7 @@ approve (CLAUDE.md rule 9). Unapproved versions are never used by crawls or by t
 """
 
 import re
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -72,6 +73,8 @@ class ConfigService:
     def __init__(self, repo: Repository, tester: SourceTester | None = None) -> None:
         self._repo = repo
         self._tester: SourceTester = tester or MockSourceTester()
+        # Called with the setting key after a change is approved (the scheduler reloads on it).
+        self.on_setting_approved: Callable[[str], None] | None = None
 
     def list_sme_functions(self) -> list[SmeFunctionOption]:
         """Active SME functions for the review form's dropdown (id + name only)."""
@@ -504,6 +507,8 @@ class ConfigService:
         pending = self._pending_setting(user, key)
         require_different_person(user, pending.requested_by, "approve this change")
         updated = self._repo.approve_setting(key, user.name, user.name)
+        if self.on_setting_approved is not None:
+            self.on_setting_approved(key)
         return self._setting_view(updated, user)
 
     def reject_setting(self, user: AppUser, key: str, reason: str) -> SettingView:

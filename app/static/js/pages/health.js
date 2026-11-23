@@ -223,8 +223,12 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-const header = document.querySelector('[data-action="run-now"]');
-if (header) header.addEventListener("click", () => startRun(null));
+// The header "Run now" button is handled in runnow.js (every page); here we only refresh.
+window.addEventListener("run-started", () => {
+  loadGrid().catch(() => {
+    /* api() already showed the error */
+  });
+});
 
 loadGrid().catch(() => {
   /* api() already showed the error */

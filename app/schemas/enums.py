@@ -119,3 +119,17 @@ class UserRole(StrEnum):
 class RecipientKind(StrEnum):
     TO = "TO"
     CC = "CC"
+
+
+class AlertKind(StrEnum):
+    """Why an alert exists. Stored for the UI banner now and Teams/email notifications in V2."""
+
+    SOURCE_FAILED = "SOURCE_FAILED"
+    SOURCE_BLOCKED = "SOURCE_BLOCKED"
+    SOURCE_ZERO_ITEMS = "SOURCE_ZERO_ITEMS"
+    SOURCE_PARSE_ERROR = "SOURCE_PARSE_ERROR"
+    SANITY_WARNING = "SANITY_WARNING"
+    URGENT_ITEM = "URGENT_ITEM"
+    RUN_PROBLEM = "RUN_PROBLEM"  # the run itself had trouble (detection or documents failed)
+    RUN_SKIPPED = "RUN_SKIPPED"  # a scheduled run could not start (another run was going)
+    RUN_MISSED = "RUN_MISSED"  # a scheduled run did not happen; a catch-up was started

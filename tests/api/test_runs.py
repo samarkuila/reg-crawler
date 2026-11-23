@@ -44,10 +44,10 @@ def test_source_health_unknown_or_bad_cycle(client) -> None:
     )
 
 
-def test_crawl_run_is_not_built_yet(client) -> None:
+def test_run_now_is_refused_politely_on_demo_data(client) -> None:
     r = as_user(client, DIVYA).post("/api/v1/crawl/run", json={})
-    assert r.status_code == 501
-    assert as_user(client, SAMARENDRA).post("/api/v1/crawl/run").status_code == 501
+    assert r.status_code == 422 and "REPO_BACKEND=sql" in r.json()["detail"]
+    assert as_user(client, SAMARENDRA).post("/api/v1/crawl/run").status_code == 422
 
 
 def test_crawl_run_checks_role_and_source(client) -> None:

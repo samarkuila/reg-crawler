@@ -1,5 +1,8 @@
 """FastAPI application entry point."""
 
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,7 +15,25 @@ from app.services.errors import DomainError
 
 BASE_DIR = Path(__file__).resolve().parent
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Start the scheduler only when SCHEDULER_ENABLED=true (one worker; see .env.example)."""
+    from app.api.deps import get_services
+
+    scheduler = None
+    if os.environ.get("SCHEDULER_ENABLED", "false").strip().lower() == "true":
+        scheduler = get_services().scheduler
+        scheduler.start()
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            scheduler.shutdown()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Regulatory Monitor",
     version="0.1.0",
     description="TVS Credit compliance automation, Module 1 POC. Mock data unless REPO_BACKEND=sql",

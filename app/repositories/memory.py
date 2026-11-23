@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.schemas.api import CycleRef, ItemFilter
 from app.schemas.entities import (
+    Alert,
     AppUser,
     AuditEvent,
     CrawlRun,
@@ -50,6 +51,7 @@ _COLLECTIONS: dict[type[BaseModel], str] = {
     SourceCheck: "checks",
     Snapshot: "snapshots",
     RawListingItem: "raw_items",
+    Alert: "alerts",
     RegulatoryItem: "items",
     ItemObservation: "observations",
     Document: "documents",
@@ -282,7 +284,14 @@ class MemoryRepository:
     def find_runs(self, ref: CycleRef) -> list[CrawlRun]:
         return [r for r in self.list_runs(ref.cycle_date) if r.cycle == ref.cycle]
 
-    def create_run(self, cycle: Cycle, cycle_date: date, triggered_by: str, actor: str) -> CrawlRun:
+    def create_run(
+        self,
+        cycle: Cycle,
+        cycle_date: date,
+        triggered_by: str,
+        actor: str,
+        sources: list[str] | None = None,
+    ) -> CrawlRun:
         with self._txn():
             run = CrawlRun(
                 id=new_id("run"),
@@ -291,10 +300,40 @@ class MemoryRepository:
                 triggered_by=triggered_by,
                 started_at=now_ist(),
                 status=RunStatus.RUNNING,
+                sources=list(sources) if sources is not None else None,
             )
             self._s["runs"][run.id] = run
             self._audit(actor, "crawl_run.created", "crawl_run", run.id, None, _dump(run))
             return run.model_copy(deep=True)
+
+    def close_run(self, run_id: str, status: RunStatus, actor: str) -> CrawlRun:
+        with self._txn():
+            run = self._s["runs"][run_id]
+            before = _dump(run)
+            run.status = status
+            run.ended_at = now_ist()
+            self._audit(actor, "crawl_run.closed", "crawl_run", run_id, before, _dump(run))
+            return run.model_copy(deep=True)
+
+    def add_alerts(self, alerts: list[Alert], actor: str) -> list[Alert]:
+        if not alerts:
+            return []
+        with self._txn():
+            for alert in alerts:
+                self._s["alerts"][alert.id] = alert.model_copy(deep=True)
+            self._audit(
+                actor,
+                "alerts.recorded",
+                "crawl_run",
+                alerts[0].run_id or alerts[0].id,
+                None,
+                {"count": len(alerts), "kinds": sorted({a.kind.value for a in alerts})},
+            )
+            return [a.model_copy(deep=True) for a in alerts]
+
+    def list_alerts(self, run_id: str | None = None) -> list[Alert]:
+        found = [a for a in self._all("alerts") if run_id is None or a.run_id == run_id]
+        return sorted(found, key=lambda a: (a.created_at, a.id))
 
     def list_source_checks(self, run_id: str | None = None) -> list[SourceCheck]:
         checks = self._all("checks")

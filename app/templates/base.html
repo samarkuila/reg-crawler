@@ -71,10 +71,12 @@
       {%- endfor %}
     </nav>
     <main class="main" id="main">
+      <div id="alert-banner" class="alert-stack" role="status" aria-live="polite" hidden></div>
       {% block content %}{% endblock %}
     </main>
   </div>
 </div>
+<script type="module" src="/static/js/runnow.js"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
