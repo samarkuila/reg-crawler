@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sources{% endblock %}
+
+{#- Page shell only (docs/ui-mockups/04-sources-admin.html). sources.js loads from /api/v1 and renders here. -#}
+{% block content %}
+<div class="row row-between row-end gap-3">
+  <div>
+    <h1 class="page-title">Sources</h1>
+    <p class="page-sub muted">What we monitor and how. Every change needs a second person’s approval.</p>
+  </div>
+  <button type="button" class="btn btn-p" id="so-add">Add source</button>
+</div>
+
+<div class="stack gap-4" id="so-pending" aria-label="Waiting for approval"></div>
+
+<section class="card" aria-label="Source register">
+  <div class="card-head">
+    <h2 class="section-title">Source register</h2>
+    <span class="muted text-13" id="so-count" aria-live="polite"></span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th scope="col">Authority · page</th><th scope="col">How we read it</th><th scope="col">Priority</th>
+        <th scope="col">Version</th><th scope="col">Status</th><th scope="col">Action</th>
+      </tr></thead>
+      <tbody id="so-rows"></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card pad-card stack gap-3" aria-label="Test result" id="so-test" hidden></section>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/sources.js"></script>
+{% endblock %}

@@ -138,6 +138,8 @@ erDiagram
 - `review_decision.is_draft`: "Save" keeps a draft; only Accept / Dismiss are final and can reach the email. `treatment` is empty only on a draft.
 - `daily_update.prepared_by` (list of names, used for approver ≠ preparer) and `exported_at`.
 - `setting.pending` (proposed value, requester, version): settings are versioned with maker–checker approval like sources.
+- POC note (Prompt 6): SME routing, recipients and the email template are stored as versioned settings (`sme-routing`, `recipients`, `email-template`) so they follow the same approval and audit path. `SmeFunction`, `Recipient` and `EmailTemplate` are read-only views built from the approved value. A function cannot be deleted, only made inactive. Prompt 7 decides whether the SQL models keep this shape or use their own tables.
+- One change per source or setting can wait for approval at a time. `GET /sources` and `GET /settings` return `can_edit`, `can_decide`, `decide_note` and a readable `pending_changes`/`changes` list for the current user.
 - Enum values not listed above: `treatment` = INFO_ONLY · OTHER_FUNCTION · FUTURE_POTENTIAL · IMPLEMENTATION_REQUIRED · NOT_RELEVANT; `applicability` = YES · NO · TBC; `status_colour` = NOT_APPLICABLE · ACTION_OVER · IN_PROGRESS · NOT_AS_PER_PLAN · YET_TO_START; `source_check.channel` = RSS · HTML · XML; `item.state` also has ENRICHED (Luna, §7a).
 - Cycle id on the wire: `YYYY-MM-DD-<CYCLE>`, e.g. `2026-11-20-EOD`.
 
@@ -179,7 +181,7 @@ erDiagram
 | POST | `/settings/{key}/approve` · `/reject` | Approver ≠ requester (checker) |
 | GET | `/sources/{id}/versions` | Version history with before/after |
 | GET | `/sme-functions` | Active SME functions (id, name) for the review form |
-| GET | `/audit?entity=&actor=&from=&to=` · `/audit/export.csv` | Audit |
+| GET | `/audit?entity=&actor=&action=&from=&to=` · `/audit/view` (same filters; before/after as readable key/value rows and filter options) · `/audit/export.csv` | Audit (read only) |
 
 Session helpers (POC): `GET /api/v1/me`, `GET /api/v1/users`, `GET /api/v1/health`; the header user switcher posts to `/switch-user` (cookie `poc_user`, hidden when `APP_ENV=prod`).
 Error mapping: 403 wrong role or same person, 404 unknown id, 409 wrong state (e.g. unchecked failed source), 422 invalid input, 501 `/crawl/run` until Prompt 13.

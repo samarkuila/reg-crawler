@@ -20,13 +20,17 @@ def list_sme_functions(services: Services = Depends(get_services)) -> list[SmeFu
 
 
 @router.get("/settings", response_model=list[SettingView], summary="All settings")
-def list_settings(services: Services = Depends(get_services)) -> list[SettingView]:
-    return services.config.list_settings()
+def list_settings(
+    user: AppUser = Depends(current_user), services: Services = Depends(get_services)
+) -> list[SettingView]:
+    return services.config.list_settings(user)
 
 
 @router.get("/settings/{key}", response_model=SettingView, summary="One setting")
-def get_setting(key: str, services: Services = Depends(get_services)) -> SettingView:
-    return services.config.get_setting(key)
+def get_setting(
+    key: str, user: AppUser = Depends(current_user), services: Services = Depends(get_services)
+) -> SettingView:
+    return services.config.get_setting(user, key)
 
 
 @router.put(

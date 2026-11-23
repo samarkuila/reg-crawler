@@ -70,6 +70,9 @@ PAGE_TEMPLATES: dict[str, str] = {
     "email": "pages/email.html",
     "health": "pages/health.html",
     "history": "pages/history.html",
+    "sources": "pages/sources.html",
+    "settings": "pages/settings.html",
+    "audit": "pages/audit.html",
 }
 
 

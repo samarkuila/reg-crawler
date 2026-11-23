@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{#- Page shell only. Same cards, tables and form patterns as the other screens. settings.js loads from /api/v1. -#}
+{% block content %}
+<div>
+  <h1 class="page-title">Settings</h1>
+  <p class="page-sub muted">Run times, routing, recipients, wording and keywords. Every save is a new version that a different approver must approve.</p>
+</div>
+
+<div class="stack gap-4" id="se-pending" aria-label="Waiting for approval"></div>
+
+<section class="card">
+  <div class="tabs" role="tablist" aria-label="Settings sections" id="se-tabs"></div>
+  <form class="pad-card form" id="se-panel" role="tabpanel" novalidate></form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/settings.js"></script>
+{% endblock %}

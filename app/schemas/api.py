@@ -301,11 +301,28 @@ class ReorderIn(Model):
 # --- Sources and settings --------------------------------------------------------------------
 
 
+class FieldChange(Model):
+    """One changed field in plain language (before and after as readable text)."""
+
+    label: str
+    before: str
+    after: str
+
+
+class KeyValue(Model):
+    key: str
+    value: str
+
+
 class SourceView(Model):
     source: Source
     how_we_read_it: str
     status_label: str
     pending_version: SourceVersion | None
+    pending_changes: list[FieldChange] = Field(default_factory=list)
+    can_edit: bool = False
+    can_decide: bool = False  # the current user may approve or reject the pending version
+    decide_note: str | None = None  # why not, in plain words
 
 
 class SourceChanges(Model):
@@ -325,7 +342,8 @@ class SourceChanges(Model):
 
 
 class SourceCreate(Model):
-    id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,60}$")
+    # Made from the authority and page name when left empty.
+    id: str | None = Field(None, pattern=r"^[a-z0-9][a-z0-9-]{1,60}$")
     authority: str = Field(min_length=1)
     page_name: str = Field(min_length=1)
     type: SourceType
@@ -369,6 +387,38 @@ class SettingRejectIn(Model):
 class SettingView(Model):
     setting: Setting
     has_pending: bool
+    title: str = ""
+    changes: list[FieldChange] = Field(default_factory=list)  # pending value vs live value
+    can_edit: bool = False
+    can_decide: bool = False
+    decide_note: str | None = None
+
+
+# --- Audit log -------------------------------------------------------------------------------
+
+
+class AuditRow(Model):
+    id: str
+    ts: datetime
+    actor: str
+    action: str
+    action_label: str
+    entity: str
+    entity_id: str
+    before: list[KeyValue]
+    after: list[KeyValue]
+
+
+class AuditOptions(Model):
+    actors: list[str]
+    entities: list[str]
+    actions: list[str]
+
+
+class AuditPage(Model):
+    total: int
+    rows: list[AuditRow]
+    options: AuditOptions
 
 
 # --- Source health grid ----------------------------------------------------------------------

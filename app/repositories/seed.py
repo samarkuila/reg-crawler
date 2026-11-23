@@ -784,6 +784,21 @@ def settings() -> list[Setting]:
             },
             "Scheduled crawl times (IST)",
         ),
+        s(
+            "sme-routing",
+            [f.model_dump(mode="json", exclude={"version"}) for f in sme_functions()],
+            "SME functions; the head is copied (CC) on items routed to that function",
+        ),
+        s(
+            "recipients",
+            [r.model_dump(mode="json", exclude={"version"}) for r in recipients()],
+            "Who the daily update is addressed to (To) and copied (CC)",
+        ),
+        s(
+            "email-template",
+            email_template().model_dump(mode="json", exclude={"version", "id"}),
+            "Wording of the daily update email",
+        ),
         s("working-days", ["MON", "TUE", "WED", "THU", "FRI"], "Days the scheduled runs happen"),
         s("holidays", [], "Dates with no scheduled run (DD.MM.YYYY)"),
         s("lookback-days", 2, "Days of listings each run re-reads"),
@@ -909,9 +924,6 @@ def load_seed(repo: MemoryRepository) -> MemoryRepository:
     repo.load(documents())
     repo.load(decisions())
     repo.load([update, *rows])
-    repo.load(sme_functions())
-    repo.load(recipients())
-    repo.load([email_template()])
     repo.load(settings())
     repo.load(audit_history())
     return repo
