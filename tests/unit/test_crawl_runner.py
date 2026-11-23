@@ -376,3 +376,52 @@ def test_run_now_with_the_real_crawler_on_a_saved_feed(tmp_path, sql_template, m
     assert len(new_items) == 3
     log = files.parent / "data" / "logs" / "runs" / run.id / "rbi-rss.log"
     assert log.is_file()  # the crawler's own log is kept per run and source
+
+
+# --- Luna after the run (advisory; the run works the same without it) ---------------------------
+
+
+def _luna(repo, enabled, script):
+    from app.agents.luna.agent import LunaAgent
+    from app.agents.orchestrator import AgentOrchestrator
+    from app.services.llm import FakeLlmClient, LoggedLlm
+
+    fake = FakeLlmClient(script)
+    return AgentOrchestrator(
+        repo, lambda: LunaAgent(LoggedLlm(fake)), enabled=lambda: enabled
+    ), fake
+
+
+def test_a_run_with_luna_on_stores_suggestions_for_its_new_items(repo, lock) -> None:
+    from tests.unit.test_luna_orchestrator import SCRIPT
+
+    make_source(repo, "clean2", rss_url=None)
+    orch, fake = _luna(repo, True, SCRIPT)
+    run = runner(repo, lock, agent=orch).start(Cycle.ADHOC, "A", "clean2", background=False)
+    (item,) = [
+        i for i in repo.list_items(__import__("app.schemas.api", fromlist=["x"]).ItemFilter())
+        if i.first_seen_run_id == run.id
+    ]  # fmt: skip
+    assert repo.list_extractions(item.id) and fake.calls
+    assert repo.get_run(run.id).status == RunStatus.COMPLETED
+
+
+def test_a_run_with_luna_off_is_identical_and_calls_nothing(repo, lock) -> None:
+    from tests.unit.test_luna_orchestrator import SCRIPT
+
+    make_source(repo, "clean3", rss_url=None)
+    orch, fake = _luna(repo, False, SCRIPT)
+    run = runner(repo, lock, agent=orch).start(Cycle.ADHOC, "A", "clean3", background=False)
+    assert fake.calls == [] and repo.list_agent_runs() == []
+    assert repo.get_run(run.id).status == RunStatus.COMPLETED
+
+
+def test_a_luna_crash_cannot_fail_the_run(repo, lock) -> None:
+    class Exploding:
+        def process(self, run_id, events):
+            raise RuntimeError("model gateway on fire")
+
+    make_source(repo, "clean4", rss_url=None)
+    run = runner(repo, lock, agent=Exploding()).start(Cycle.ADHOC, "A", "clean4", background=False)
+    assert repo.get_run(run.id).status == RunStatus.COMPLETED  # items flowed, run closed normally
+    assert not lock.held()

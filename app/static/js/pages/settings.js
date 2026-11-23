@@ -180,6 +180,27 @@ const SECTIONS = [
       "low-relevance-threshold": Number(form.querySelector("#k-thr").value),
     }),
   },
+  {
+    id: "luna",
+    title: "Luna (AI helper)",
+    keys: ["screening-guidance", "agent-enabled", "agent-daily-budget-inr"],
+    html() {
+      const guidance = val("screening-guidance");
+      const text = guidance && typeof guidance === "object" ? guidance.text : guidance;
+      return (
+        '<h2 class="section-title">Luna (AI helper)</h2>' +
+        '<p class="muted text-14">Luna reads public regulator text and suggests: how relevant an item is, and values for the review form, each with an exact quote. It never decides, hides or sends anything. The system works the same with Luna off. Luna also needs AGENT_LUNA_ENABLED=true in the environment.</p>' +
+        `<label class="check"><input type="checkbox" id="l-on"${val("agent-enabled") === false ? "" : " checked"}${dis()}> Luna is on</label>` +
+        `<div class="field se-narrow"><label for="l-bud">Daily budget (rupees)</label><input id="l-bud" type="number" min="0" max="100000" value="${escapeHtml(val("agent-daily-budget-inr") ?? "")}"${dis()}><span class="muted text-13">When this is used up Luna pauses for the day and items carry on without suggestions.</span></div>` +
+        `<div class="field"><label for="l-guid">Screening guidance (plain English)</label><textarea id="l-guid" rows="8"${dis()}>${escapeHtml(text || "")}</textarea><span class="muted text-13">Tells Luna what counts as a regulatory update for TVS Credit. Every change is versioned and needs approval from a different person.</span></div>`
+      );
+    },
+    collect: (form) => ({
+      "screening-guidance": { ...(val("screening-guidance") || {}), text: form.querySelector("#l-guid").value.trim() },
+      "agent-enabled": form.querySelector("#l-on").checked,
+      "agent-daily-budget-inr": Number(form.querySelector("#l-bud").value),
+    }),
+  },
 ];
 
 const input = (field, value, extra = "") =>

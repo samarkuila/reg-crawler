@@ -11,6 +11,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.enums import (
+    AgentStatus,
+    AgentTask,
     AlertKind,
     Applicability,
     ChangeType,
@@ -19,7 +21,10 @@ from app.schemas.enums import (
     CheckStatus,
     Cycle,
     FetchStatus,
+    FlagStatus,
+    FlagType,
     ItemState,
+    NbfcRelevance,
     Priority,
     RecipientKind,
     RunStatus,
@@ -130,6 +135,62 @@ class Alert(Entity):
     message: str
     created_at: datetime
     delivered_at: datetime | None = None
+
+
+class AiExtraction(Entity):
+    """Append-only. What Luna suggested for an item. Never a decision (policy A1, A9)."""
+
+    id: str
+    item_id: str
+    task: AgentTask  # SCREEN | EXTRACT
+    # Each field: {value, evidence_quote, location, confidence, validated}
+    fields: dict[str, Any] = Field(default_factory=dict)
+    nbfc_relevance: NbfcRelevance | None = None
+    relevance_score: float | None = None
+    suggested_treatment: str | None = None
+    suggested_sme_function: str | None = None
+    model: str
+    deployment: str | None = None
+    prompt_version: str
+    guidance_version: int | None = None
+    created_at: datetime
+
+
+class AgentFlag(Entity):
+    """A possible missed item (from the sweep) or a rules-vs-Luna disagreement, for a person."""
+
+    id: str
+    run_id: str | None = None
+    source_id: str | None = None
+    snapshot_id: str | None = None
+    item_id: str | None = None
+    type: FlagType
+    payload: dict[str, Any] = Field(default_factory=dict)
+    status: FlagStatus = FlagStatus.OPEN
+    resolved_by: str | None = None
+    resolved_at: datetime | None = None
+    created_at: datetime
+
+
+class AgentRun(Entity):
+    """One LLM call, logged whatever happened (spec §5.9)."""
+
+    id: str
+    run_id: str | None = None
+    task: AgentTask
+    item_id: str | None = None
+    snapshot_id: str | None = None
+    model: str
+    deployment: str | None = None
+    prompt_version: str
+    guidance_version: int | None = None
+    tokens_in: int = 0
+    tokens_out: int = 0
+    latency_ms: int = 0
+    cost_inr: float = 0.0
+    status: AgentStatus
+    detail: str | None = None
+    created_at: datetime
 
 
 class RawListingItem(Entity):

@@ -133,3 +133,37 @@ class AlertKind(StrEnum):
     RUN_PROBLEM = "RUN_PROBLEM"  # the run itself had trouble (detection or documents failed)
     RUN_SKIPPED = "RUN_SKIPPED"  # a scheduled run could not start (another run was going)
     RUN_MISSED = "RUN_MISSED"  # a scheduled run did not happen; a catch-up was started
+
+
+class NbfcRelevance(StrEnum):
+    """Luna's reading of how much an item concerns NBFCs (agent spec T1)."""
+
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    NONE = "NONE"
+
+
+class AgentTask(StrEnum):
+    SCREEN = "SCREEN"
+    EXTRACT = "EXTRACT"
+    SWEEP = "SWEEP"
+
+
+class AgentStatus(StrEnum):
+    OK = "OK"
+    INVALID_JSON = "INVALID_JSON"
+    QUOTE_REJECTED = "QUOTE_REJECTED"  # a quote was not in the text, so that field was nulled
+    ERROR = "ERROR"
+    BUDGET = "BUDGET"  # the daily budget was used up; nothing was sent
+
+
+class FlagType(StrEnum):
+    POSSIBLE_MISS = "POSSIBLE_MISS"
+    DISAGREEMENT = "DISAGREEMENT"
+
+
+class FlagStatus(StrEnum):
+    OPEN = "OPEN"
+    RESOLVED = "RESOLVED"
+    FALSE_ALARM = "FALSE_ALARM"

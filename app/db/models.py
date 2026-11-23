@@ -14,6 +14,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Date,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -26,6 +27,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.db.types import TZDateTime, enum_column, new_id
 from app.schemas.enums import (
+    AgentStatus,
+    AgentTask,
     AlertKind,
     Applicability,
     ChangeType,
@@ -34,7 +37,10 @@ from app.schemas.enums import (
     CheckStatus,
     Cycle,
     FetchStatus,
+    FlagStatus,
+    FlagType,
     ItemState,
+    NbfcRelevance,
     Priority,
     RecipientKind,
     RunStatus,
@@ -174,6 +180,67 @@ class Alert(Base):
     message: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TZDateTime)
     delivered_at: Mapped[datetime | None] = mapped_column(TZDateTime)
+
+
+class AiExtraction(Base):
+    """Append-only (database trigger): Luna's suggestions for an item."""
+
+    __tablename__ = "ai_extraction"
+
+    id: Mapped[str] = _id()
+    item_id: Mapped[str] = mapped_column(ForeignKey("regulatory_item.id"), index=True)
+    task: Mapped[AgentTask] = mapped_column(enum_column(AgentTask, "ai_extraction_task"))
+    fields: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    nbfc_relevance: Mapped[NbfcRelevance | None] = mapped_column(
+        enum_column(NbfcRelevance, "ai_extraction_relevance"), nullable=True
+    )
+    relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    suggested_treatment: Mapped[str | None] = mapped_column(String(40))
+    suggested_sme_function: Mapped[str | None] = mapped_column(String(60))
+    model: Mapped[str] = mapped_column(String(80))
+    deployment: Mapped[str | None] = mapped_column(String(120))
+    prompt_version: Mapped[str] = mapped_column(String(40))
+    guidance_version: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime)
+
+
+class AgentFlag(Base):
+    __tablename__ = "agent_flag"
+
+    id: Mapped[str] = _id()
+    run_id: Mapped[str | None] = mapped_column(ForeignKey("crawl_run.id"), index=True)
+    source_id: Mapped[str | None] = mapped_column(ForeignKey("source.id"), index=True)
+    snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("snapshot.id"))
+    item_id: Mapped[str | None] = mapped_column(ForeignKey("regulatory_item.id"))
+    type: Mapped[FlagType] = mapped_column(enum_column(FlagType, "agent_flag_type"))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    status: Mapped[FlagStatus] = mapped_column(
+        enum_column(FlagStatus, "agent_flag_status"), default=FlagStatus.OPEN
+    )
+    resolved_by: Mapped[str | None] = mapped_column(String(100))
+    resolved_at: Mapped[datetime | None] = mapped_column(TZDateTime)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime)
+
+
+class AgentRun(Base):
+    __tablename__ = "agent_run"
+
+    id: Mapped[str] = _id()
+    run_id: Mapped[str | None] = mapped_column(ForeignKey("crawl_run.id"), index=True)
+    task: Mapped[AgentTask] = mapped_column(enum_column(AgentTask, "agent_run_task"))
+    item_id: Mapped[str | None] = mapped_column(ForeignKey("regulatory_item.id"))
+    snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("snapshot.id"))
+    model: Mapped[str] = mapped_column(String(80))
+    deployment: Mapped[str | None] = mapped_column(String(120))
+    prompt_version: Mapped[str] = mapped_column(String(40))
+    guidance_version: Mapped[int | None] = mapped_column(Integer)
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    cost_inr: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[AgentStatus] = mapped_column(enum_column(AgentStatus, "agent_run_status"))
+    detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, index=True)
 
 
 class RawListingItem(Base):

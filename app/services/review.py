@@ -8,6 +8,7 @@ import re
 import uuid
 from datetime import date
 
+from app.agents import settings as agent_settings
 from app.repositories.base import Repository
 from app.schemas.api import (
     ApplicabilitySuggestion,
@@ -22,6 +23,8 @@ from app.schemas.api import (
     ItemListResponse,
     ItemSection,
     ItemSummary,
+    LunaChip,
+    LunaSuggestions,
     Prefill,
     RunDetail,
     SourceCheckView,
@@ -45,6 +48,8 @@ from app.schemas.enums import (
     Channel,
     CheckStatus,
     FetchStatus,
+    FlagStatus,
+    FlagType,
     ItemState,
     Priority,
     Treatment,
@@ -272,6 +277,9 @@ class ReviewService:
             if item.relevance_score >= 70
             else ("Medium" if item.relevance_score >= threshold else "Low")
         )
+        luna = self._luna_chip(item)
+        if luna is not None and luna.disagreement:
+            badges.append("DISAGREE")
         section: ItemSection
         if item.state == ItemState.NEEDS_MANUAL_FETCH:
             section = "manual_fetch"
@@ -279,6 +287,8 @@ class ReviewService:
             section = "low_relevance"
         else:
             section = "attention"
+        if luna is not None and luna.disagreement and section == "low_relevance":
+            section = "attention"  # rules and Luna disagree: raised, never lowered
         return ItemSummary(
             id=item.id,
             internal_ref=item.internal_ref,
@@ -305,6 +315,7 @@ class ReviewService:
             section=section,
             decided=item.state in DECIDED_STATES,
             first_seen_at=item.first_seen_at,
+            luna=luna,
         )
 
     def list_items(
@@ -331,6 +342,7 @@ class ReviewService:
         summaries.sort(
             key=lambda s: (
                 s.priority != Priority.URGENT,
+                not (s.luna and s.luna.disagreement),  # disagreements sort higher
                 -s.relevance_score,
                 -(s.displayed_date.toordinal() if s.displayed_date else 0),
                 s.title.lower(),
@@ -362,6 +374,58 @@ class ReviewService:
         if item is None:
             raise NotFoundError(f"Item {item_id} not found")
         return item
+
+    # --- Luna (suggestions only) ---------------------------------------------------------------
+
+    def _extractions(self, item: RegulatoryItem):  # type: ignore[no-untyped-def]
+        done = self._repo.list_extractions(item.id)
+        screen = next((e for e in reversed(done) if e.task.value == "SCREEN"), None)
+        extract = next((e for e in reversed(done) if e.task.value == "EXTRACT"), None)
+        return screen, extract
+
+    def _luna_chip(self, item: RegulatoryItem) -> LunaChip | None:
+        screen, _ = self._extractions(item)
+        flags = self._repo.list_agent_flags(item_id=item.id, status=FlagStatus.OPEN)
+        disagree = any(f.type == FlagType.DISAGREEMENT for f in flags)
+        if screen is None and not disagree:
+            return None
+        return LunaChip(
+            level=screen.nbfc_relevance.value if screen and screen.nbfc_relevance else None,
+            score=screen.relevance_score if screen else None,
+            disagreement=disagree,
+        )
+
+    def luna_suggestions(self, item: RegulatoryItem) -> LunaSuggestions | None:
+        screen, extract = self._extractions(item)
+        if screen is None and extract is None:
+            return None
+        flag = next(
+            (
+                f
+                for f in self._repo.list_agent_flags(item_id=item.id, status=FlagStatus.OPEN)
+                if f.type == FlagType.DISAGREEMENT
+            ),
+            None,
+        )
+        first = screen or extract
+        fields = screen.fields if screen else {}
+        return LunaSuggestions(
+            level=screen.nbfc_relevance.value if screen and screen.nbfc_relevance else None,
+            score=screen.relevance_score if screen else None,
+            reason=fields.get("reason"),
+            addressed_to=list(fields.get("addressed_to") or []),
+            treatment=screen.suggested_treatment if screen else None,
+            sme_function=screen.suggested_sme_function if screen else None,
+            urgency=fields.get("urgency"),
+            evidence=list(fields.get("evidence") or []),
+            fields=extract.fields if extract else {},
+            model=first.model,
+            deployment=first.deployment,
+            prompt_version=first.prompt_version,
+            guidance_version=first.guidance_version,
+            created_at=first.created_at,
+            disagreement=flag.payload if flag else None,
+        )
 
     def _document_text(self, item: RegulatoryItem) -> str | None:
         """Text of the item's first stored document that has any (read-only)."""
@@ -439,6 +503,8 @@ class ReviewService:
             source=source,
             source_version=version,
             chain=self._chain(item, source, observations, snapshots, documents, decisions, version),
+            luna=self.luna_suggestions(item),
+            luna_enabled=agent_settings.agent_enabled(self._repo),
         )
 
     def _chain(self, item, source, observations, snapshots, documents, decisions, version):  # type: ignore[no-untyped-def]

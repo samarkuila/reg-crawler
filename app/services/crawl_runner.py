@@ -27,7 +27,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.repositories.base import Repository
 from app.schemas.entities import Alert, CrawlRun, Source, SourceCheck, now_ist
@@ -208,12 +208,14 @@ class CrawlRunner:
         repo: Repository,
         launcher: SpiderLauncher,
         documents: DocumentService | None = None,
+        agent: Any = None,
         lock: RunLock | None = None,
         disabled_reason: str | None = None,
     ) -> None:
         self._repo = repo
         self._launcher = launcher
         self._documents = documents
+        self._agent = agent  # Luna (advisory); None or off = the run works exactly as before
         self._lock = lock or RunLock()
         self._disabled = disabled_reason
         self._thread: threading.Thread | None = None
@@ -343,6 +345,8 @@ class CrawlRunner:
             summary.detection = self._detect(run, summary)
             self._lock.touch()
             self._fetch_documents(summary)
+            self._lock.touch()
+            self._run_agent(run, summary)
             self._record_alerts(run, summary)
         except Exception as exc:  # the run must still be closed below
             log.exception("Run %s failed", run.id)
@@ -432,6 +436,15 @@ class CrawlRunner:
         except Exception as exc:
             log.exception("Documents failed")
             summary.problems.append(f"Documents failed: {exc}")
+
+    def _run_agent(self, run: CrawlRun, summary: RunSummary) -> None:
+        """Luna after detection and documents. It cannot fail the run: problems are alerts."""
+        if self._agent is None or summary.detection is None:
+            return
+        try:
+            self._agent.process(run.id, summary.detection.events)
+        except Exception:
+            log.exception("Luna failed for %s", run.id)  # the items simply have no suggestions
 
     # --- alerts ------------------------------------------------------------------------------
 

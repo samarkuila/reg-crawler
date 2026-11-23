@@ -50,6 +50,8 @@ SETTING_TITLES = {
     "exclusion-keywords": "Exclusion keywords",
     "low-relevance-threshold": "Low-relevance threshold",
     "screening-guidance": "Screening guidance",
+    "agent-enabled": "Luna on/off",
+    "agent-daily-budget-inr": "Luna daily budget (INR)",
 }
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -353,6 +355,8 @@ class ConfigService:
     def _normalise(self, key: str, current: Any, value: Any) -> Any:  # noqa: PLR0911, PLR0912
         if key == "low-relevance-threshold" and not 0 <= value <= 100:
             raise InvalidError("The threshold must be between 0 and 100.")
+        if key == "agent-daily-budget-inr" and not 0 <= value <= 100_000:
+            raise InvalidError("The daily budget must be between 0 and 100000 rupees.")
         if key == "lookback-days" and not 0 <= value <= 30:
             raise InvalidError("Lookback must be between 0 and 30 days.")
         if key == "run-times":
