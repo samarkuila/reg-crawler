@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- UI REFERENCE MOCKUP (static, sample data). Match layout, components and tokens; do not copy sample data into the app. -->
+<meta charset="utf-8">
+<title>Email preview – Regulatory Monitor</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;font-family:'Jost','Segoe UI',Arial,sans-serif;color:#252728;background:#F5F7FA}
+a{color:#114984}a:hover{color:#0B3260}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:6px;color:#3A3D40;text-decoration:none;font-size:15px}
+.nav a:hover{background:#F1F4F8;color:#114984}
+.nav a.on{background:#E8F0FA;color:#114984;font-weight:500}
+.card{background:#fff;border:1px solid #E3E7ED;border-radius:8px}
+.b{display:inline-block;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.b-ok{background:#E6F4EC;color:#0A6B34}.b-grey{background:#EEF0F3;color:#45484C}.b-mod{background:#FFF4D6;color:#6B4A00}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:6px;font:500 14px 'Jost','Segoe UI',sans-serif;border:1px solid transparent;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn-p{background:#114984;color:#fff}.btn-g{background:#0E8943;color:#fff}.btn-o{background:#fff;color:#114984;border-color:#B9C7DA}
+label{font-size:13px;color:#45484C;font-weight:500}
+input,select{font:400 14px 'Jost','Segoe UI',sans-serif;border:1px solid #CBD3DE;border-radius:6px;padding:10px;color:#252728;background:#fff;width:100%;box-sizing:border-box}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block;flex:none}
+.muted{color:#646569}
+.em{font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:14px;color:#1F1F1F}
+.em table{border-collapse:collapse;width:100%}
+.em th{background:#114984;color:#fff;font-weight:600;font-size:13px;padding:8px;border:1px solid #9FB3CC;text-align:left;vertical-align:bottom}
+.em td{border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top}
+</style>
+</head>
+<body>
+
+<div style="min-height:100vh;display:flex;flex-direction:column">
+<header style="background:#114984;color:#fff;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:10px 24px;min-height:64px;box-sizing:border-box;border-bottom:3px solid #0E8943">
+<div style="display:flex;align-items:center;gap:12px">
+<div role="img" aria-label="Logo placeholder – replace with official TVS Credit logo" style="width:120px;height:36px;border:1px dashed #C9D8EA;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff">TVS Credit logo</div>
+<div style="font-size:19px;font-weight:500">Regulatory Monitor</div>
+<span class="b" style="background:#0E8943;color:#fff">POC</span>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:8px">
+<label for="cyc" style="color:#DCE6F2">Cycle</label>
+<select id="cyc" style="width:auto;min-height:40px;padding:6px 10px"><option>20.11.2026 · End of day</option></select>
+</div>
+<a class="btn btn-g" href="03-source-health.html">Run now</a>
+<div style="font-size:14px;color:#fff">Divya G. · Reviewer</div>
+</header>
+<div style="display:flex;flex-wrap:wrap;flex:1">
+<nav class="nav" aria-label="Main" style="flex:1 1 220px;padding:20px 12px;display:flex;flex-direction:column;gap:4px;background:#fff;border-right:1px solid #E3E7ED;box-sizing:border-box">
+<a href="01-daily-review.html">Daily review</a>
+<a href="03-source-health.html">Source health</a>
+<a class="on" href="02-email-preview.html" aria-current="page">Email preview</a>
+<a href="05-item-history.html">Item history</a>
+<div style="font-size:12px;color:#646569;padding:16px 14px 4px">Admin</div>
+<a href="04-sources-admin.html">Sources</a>
+<a href="#">Settings</a>
+<a href="#">Audit log</a>
+</nav>
+<main style="flex:999 1 560px;min-width:0;padding:28px 32px;display:flex;flex-direction:column;gap:20px;box-sizing:border-box">
+
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px">
+<div>
+<h1 style="margin:0;font-size:28px;font-weight:500;color:#114984">Email preview</h1>
+<p style="margin:4px 0 0;font-size:15px" class="muted">Draft for the end-of-day cycle, 20.11.2026 · Built only from reviewed items · <span class="b b-grey">Draft</span></p>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button type="button" class="btn btn-o">Copy HTML</button>
+<button type="button" class="btn btn-o">Download .eml</button>
+<button type="button" class="btn btn-g">Approve</button>
+</div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+
+<aside style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:16px">
+<section class="card" aria-label="Pre-send checks" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+<h2 style="margin:0;font-size:17px;font-weight:500">Before you approve</h2>
+<div style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex:none;margin-top:2px"><circle cx="9" cy="9" r="8" fill="#E6F4EC"/><path d="M5 9.5l2.6 2.5L13 6.5" stroke="#0A6B34" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg><span>Every row has a review decision</span></div>
+<div style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex:none;margin-top:2px"><circle cx="9" cy="9" r="8" fill="#E6F4EC"/><path d="M5 9.5l2.6 2.5L13 6.5" stroke="#0A6B34" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg><span>All 5 sources checked — eGazette checked manually by Divya G. at 19:52</span></div>
+<div style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex:none;margin-top:2px"><circle cx="9" cy="9" r="8" fill="#FFF4D6"/><path d="M9 5v5M9 12.6v.4" stroke="#6B4A00" stroke-width="1.8" stroke-linecap="round"/></svg><span>Approver needed: a second person must approve (George K.)</span></div>
+</section>
+
+<section class="card" aria-label="Rows in this email" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:17px;font-weight:500">Rows (drag to reorder)</h2><span class="muted" style="font-size:13px">2 included</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #E3E7ED;border-radius:6px;font-size:14px"><span aria-hidden="true" style="color:#9AA3AE;font-size:18px;line-height:1">⋮⋮</span><span style="font-weight:500">1</span><span style="flex:1">IoRS – FAQs · RBI</span><span class="dot" style="background:#F2B200"></span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #E3E7ED;border-radius:6px;font-size:14px"><span aria-hidden="true" style="color:#9AA3AE;font-size:18px;line-height:1">⋮⋮</span><span style="font-weight:500">2</span><span style="flex:1">Consent Manager framework · MeitY</span><span class="dot" style="background:#F2B200"></span></div>
+</section>
+
+<section class="card" aria-label="Recipients" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font-size:17px;font-weight:500">Subject and recipients</h2>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="e-sub">Subject</label><input id="e-sub" value="Daily Regulatory Update – 20.11.2026 (EOD)"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="e-to">To</label><input id="e-to" value="TVSCS Compliance team; Home Credit Compliance team"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><label for="e-cc">CC (added from SME routing)</label><input id="e-cc" value="None for this cycle"></div>
+<p class="muted" style="margin:0;font-size:13px">The system never sends email. Download the draft and send it from Outlook.</p>
+</section>
+</aside>
+
+<section class="card" aria-label="Email preview" style="flex:999 1 560px;min-width:0;padding:0;overflow:hidden">
+<div style="padding:12px 18px;border-bottom:1px solid #E3E7ED;background:#FAFBFC;font-size:13px" class="muted">Preview as it will look in Outlook</div>
+<div class="em" style="padding:24px 28px;display:flex;flex-direction:column;gap:14px">
+<p style="margin:0">Dear All,</p>
+<p style="margin:0">Appended below are the latest regulatory updates, the details of which are provided below. Please let us know if there are any additional relevant updates that should be included for our information and necessary action, wherever applicable.</p>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><th>S.No</th><th>Reference No. and Date</th><th>Authority</th><th>Guidelines</th><th>Applicability</th><th>Effective Date</th><th>Status</th><th>Impact on TVSCS</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Inter-operable Regulatory Sandbox: IoRS – FAQs<br><strong>Date: 17.11.2026 (Updated)</strong></td><td>RBI</td><td>Inter-operable Regulatory Sandbox (IoRS)<br><a href="#">rbi.org.in/Scripts/FAQDisplay.aspx?Id=174</a></td><td>Yes</td><td>17.11.2026</td><td style="text-align:center"><span class="dot" style="background:#F2B200"></span></td><td>The updated FAQs explain the Inter-operable Regulatory Sandbox for testing hybrid financial products under more than one regulator, covering eligibility, regulators, application, testing and approvals before launch.</td></tr>
+<tr><td>2</td><td>PIB Release ID 2336151 dated 14.11.2026</td><td>MeitY</td><td>Consent Manager Registration Framework Comes into Effect<br><a href="#">pib.gov.in/PressReleaseDetail.aspx?PRID=2336151</a></td><td>Yes</td><td>13.11.2026</td><td style="text-align:center"><span class="dot" style="background:#F2B200"></span></td><td>The registration framework for Consent Managers under the DPDP Act, 2023 is now in effect. To be noted as part of the phased implementation of the DPDP framework.</td></tr>
+</tbody>
+</table>
+</div>
+<p style="margin:0;font-style:italic;text-align:center">This update is based on our initial review of the referenced website. If any critical information impacting TVSCS has been missed, please provide the details for inclusion in the implementation tracker.</p>
+<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:18px;font-size:13px">
+<span style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:#808080"></span>Not Applicable</span>
+<span style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:#0B8A3E"></span>Action over</span>
+<span style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:#1F5FD6"></span>Action in Progress</span>
+<span style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:#D93025"></span>Progress not as per plan</span>
+<span style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:#F2B200"></span>Action yet to start</span>
+</div>
+<p style="margin:0">Regards,<br>Divya Gopakumar</p>
+</div>
+</section>
+</div>
+</main>
+</div>
+</div>
+</body>
+</html>

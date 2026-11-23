@@ -1,0 +1,55 @@
+[project]
+name = "reg-monitor"
+version = "0.1.0"
+description = "Regulatory Monitor — TVS Credit Compliance Automation, Module 1 POC"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2",
+    "jinja2",
+    "python-multipart",
+    "sqlalchemy>=2",
+    "alembic",
+    "scrapy",
+    "feedparser",
+    "pymupdf",
+    "pdfplumber",
+    "apscheduler",
+    "pyyaml",
+    "python-dotenv",
+    "structlog",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "httpx",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Untouched `scrapy startproject` boilerplate; remove these excludes when Prompt 9 rewrites the files.
+extend-exclude = [
+    "crawler/regcrawler/settings.py",
+    "crawler/regcrawler/middlewares.py",
+    "crawler/regcrawler/pipelines.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

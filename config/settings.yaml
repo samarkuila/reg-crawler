@@ -1,0 +1,4 @@
+# Placeholder — populated in later prompts. Config is data; do not hard-code in code.
+crawler:
+  contact: "compliance-automation@example.invalid"   # replace with the real contact before any live crawl
+users: []

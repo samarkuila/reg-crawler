@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- UI REFERENCE MOCKUP (static, sample data). Match layout, components and tokens; do not copy sample data into the app. -->
+<meta charset="utf-8">
+<title>Sources – Regulatory Monitor</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;font-family:'Jost','Segoe UI',Arial,sans-serif;color:#252728;background:#F5F7FA}
+a{color:#114984}a:hover{color:#0B3260}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:6px;color:#3A3D40;text-decoration:none;font-size:15px}
+.nav a:hover{background:#F1F4F8;color:#114984}
+.nav a.on{background:#E8F0FA;color:#114984;font-weight:500}
+.card{background:#fff;border:1px solid #E3E7ED;border-radius:8px}
+.b{display:inline-block;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.b-urg{background:#FDECEA;color:#A11B12}.b-ok{background:#E6F4EC;color:#0A6B34}.b-grey{background:#EEF0F3;color:#45484C}.b-mod{background:#FFF4D6;color:#6B4A00}.b-new{background:#E8F0FA;color:#114984}
+table{border-collapse:collapse;width:100%}
+th{text-align:left;font-size:13px;font-weight:500;color:#646569;padding:10px 14px;border-bottom:1px solid #E3E7ED;background:#FAFBFC;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid #EDF0F4;font-size:14px;vertical-align:middle}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:6px;font:500 14px 'Jost','Segoe UI',sans-serif;border:1px solid transparent;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn-p{background:#114984;color:#fff}.btn-g{background:#0E8943;color:#fff}.btn-o{background:#fff;color:#114984;border-color:#B9C7DA}.btn-d{background:#fff;color:#A11B12;border-color:#F0B9B3}
+label{font-size:13px;color:#45484C;font-weight:500}
+select,input{font:400 14px 'Jost','Segoe UI',sans-serif;border:1px solid #CBD3DE;border-radius:6px;padding:10px;color:#252728;background:#fff;box-sizing:border-box}
+.muted{color:#646569}
+code{font-family:Consolas,'Courier New',monospace;font-size:13px}
+</style>
+</head>
+<body>
+
+<div style="min-height:100vh;display:flex;flex-direction:column">
+<header style="background:#114984;color:#fff;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:10px 24px;min-height:64px;box-sizing:border-box;border-bottom:3px solid #0E8943">
+<div style="display:flex;align-items:center;gap:12px">
+<div role="img" aria-label="Logo placeholder – replace with official TVS Credit logo" style="width:120px;height:36px;border:1px dashed #C9D8EA;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff">TVS Credit logo</div>
+<div style="font-size:19px;font-weight:500">Regulatory Monitor</div>
+<span class="b" style="background:#0E8943;color:#fff">POC</span>
+</div>
+<div style="flex:1"></div>
+<a class="btn btn-g" href="03-source-health.html">Run now</a>
+<div style="font-size:14px;color:#fff">George K. · Approver</div>
+</header>
+<div style="display:flex;flex-wrap:wrap;flex:1">
+<nav class="nav" aria-label="Main" style="flex:1 1 220px;padding:20px 12px;display:flex;flex-direction:column;gap:4px;background:#fff;border-right:1px solid #E3E7ED;box-sizing:border-box">
+<a href="01-daily-review.html">Daily review</a>
+<a href="03-source-health.html">Source health</a>
+<a href="02-email-preview.html">Email preview</a>
+<a href="05-item-history.html">Item history</a>
+<div style="font-size:12px;color:#646569;padding:16px 14px 4px">Admin</div>
+<a class="on" href="04-sources-admin.html" aria-current="page">Sources</a>
+<a href="#">Settings</a>
+<a href="#">Audit log</a>
+</nav>
+<main style="flex:999 1 560px;min-width:0;padding:28px 32px;display:flex;flex-direction:column;gap:20px;box-sizing:border-box">
+
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px">
+<div>
+<h1 style="margin:0;font-size:28px;font-weight:500;color:#114984">Sources</h1>
+<p style="margin:4px 0 0;font-size:15px" class="muted">What we monitor and how. Every change needs a second person’s approval.</p>
+</div>
+<button type="button" class="btn btn-p">Add source</button>
+</div>
+
+<section class="card" aria-label="Pending approval" style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;border-color:#F2D58A">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">
+<div style="display:flex;align-items:center;gap:10px"><span class="b b-mod">Pending approval</span><h2 style="margin:0;font-size:17px;font-weight:500">eGazette · Extraordinary gazettes — version 3</h2></div>
+<span class="muted" style="font-size:13px">Requested by Samarendra K. · 21.11.2026 11:42</span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+<div style="border:1px solid #E3E7ED;border-radius:6px;padding:12px 14px;background:#FAFBFC">
+<div class="muted" style="font-size:13px;margin-bottom:6px">Before (v2)</div>
+<div style="font-size:14px">Ministry filter: Finance, MSME, Communications, Telecommunications</div>
+</div>
+<div style="border:1px solid #BFE3CD;border-radius:6px;padding:12px 14px;background:#F2FAF5">
+<div class="muted" style="font-size:13px;margin-bottom:6px">After (v3)</div>
+<div style="font-size:14px">Ministry filter: Finance, MSME, Communications, Telecommunications, <strong style="font-weight:500;color:#0A6B34">Electronics and IT, Labour and Employment</strong></div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<button type="button" class="btn btn-g">Approve</button>
+<button type="button" class="btn btn-d">Reject</button>
+<button type="button" class="btn btn-o">Test this source</button>
+</div>
+</section>
+
+<section class="card" aria-label="Source register">
+<div style="padding:14px 16px;border-bottom:1px solid #E3E7ED;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center">
+<h2 style="margin:0;font-size:18px;font-weight:500">Source register</h2>
+<span class="muted" style="font-size:13px">5 active in POC · 8 planned</span>
+</div>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><th scope="col">Authority · page</th><th scope="col">How we read it</th><th scope="col">Priority</th><th scope="col">Version</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+<tbody>
+<tr><td style="font-weight:500">RBI · Notifications</td><td>RSS + HTML listing</td><td>Normal</td><td>v2</td><td><span class="b b-ok">Active</span></td><td><a href="#">Edit</a> · <a href="#">Test</a></td></tr>
+<tr><td style="font-weight:500">RBI · Press releases</td><td>RSS + HTML listing</td><td>Normal</td><td>v1</td><td><span class="b b-ok">Active</span></td><td><a href="#">Edit</a> · <a href="#">Test</a></td></tr>
+<tr><td style="font-weight:500">UNSC · Consolidated sanctions list</td><td>Official XML file</td><td><span class="b b-urg">Urgent · hourly</span></td><td>v1</td><td><span class="b b-ok">Active</span></td><td><a href="#">Edit</a> · <a href="#">Test</a></td></tr>
+<tr><td style="font-weight:500">TRAI · Press releases</td><td>HTML listing</td><td>Normal</td><td>v1</td><td><span class="b b-ok">Active</span></td><td><a href="#">Edit</a> · <a href="#">Test</a></td></tr>
+<tr><td style="font-weight:500">IRDAI · Circulars and guidelines</td><td>HTML listing</td><td>Normal</td><td>v1</td><td><span class="b b-ok">Active</span></td><td><a href="#">Edit</a> · <a href="#">Test</a></td></tr>
+<tr><td style="font-weight:500">eGazette · Extraordinary gazettes</td><td>HTML listing, ministry filter</td><td>Normal</td><td>v2 <span class="muted">(v3 pending)</span></td><td><span class="b b-ok">Active</span></td><td><a href="#">Edit</a> · <a href="#">Test</a></td></tr>
+<tr><td style="font-weight:500">NPCI · NACH circulars</td><td>To be confirmed by probe</td><td>Normal</td><td>—</td><td><span class="b b-grey">Planned (V2)</span></td><td><a href="#">Set up</a></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="card" aria-label="Test result" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">
+<h2 style="margin:0;font-size:17px;font-weight:500">Test result · eGazette v3 (dry run, nothing saved)</h2>
+<span class="b b-ok">Parsed 4 rows in 6.2 s</span>
+</div>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><th scope="col">Ministry</th><th scope="col">Subject</th><th scope="col">Publish date</th><th scope="col">Gazette ID</th></tr></thead>
+<tbody>
+<tr><td>Ministry of Finance</td><td>Notification (sample row)</td><td>20.11.2026</td><td><code>CG-DL-E-20112026-000001</code></td></tr>
+<tr><td>Ministry of Labour and Employment</td><td>Notification (sample row)</td><td>20.11.2026</td><td><code>CG-DL-E-20112026-000002</code></td></tr>
+</tbody>
+</table>
+</div>
+<p class="muted" style="margin:0;font-size:13px">Check the rows look right before approving. If the site shows a verification page, the test stops and reports “Blocked”.</p>
+</section>
+</main>
+</div>
+</div>
+</body>
+</html>

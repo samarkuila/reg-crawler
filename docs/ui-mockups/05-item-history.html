@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- UI REFERENCE MOCKUP (static, sample data). Match layout, components and tokens; do not copy sample data into the app. -->
+<meta charset="utf-8">
+<title>Item history – Regulatory Monitor</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;font-family:'Jost','Segoe UI',Arial,sans-serif;color:#252728;background:#F5F7FA}
+a{color:#114984}a:hover{color:#0B3260}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 14px;border-radius:6px;color:#3A3D40;text-decoration:none;font-size:15px}
+.nav a:hover{background:#F1F4F8;color:#114984}
+.nav a.on{background:#E8F0FA;color:#114984;font-weight:500}
+.card{background:#fff;border:1px solid #E3E7ED;border-radius:8px}
+.b{display:inline-block;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.b-ok{background:#E6F4EC;color:#0A6B34}.b-grey{background:#EEF0F3;color:#45484C}.b-mod{background:#FFF4D6;color:#6B4A00}.b-new{background:#E8F0FA;color:#114984}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:6px;font:500 14px 'Jost','Segoe UI',sans-serif;border:1px solid transparent;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn-p{background:#114984;color:#fff}.btn-g{background:#0E8943;color:#fff}.btn-o{background:#fff;color:#114984;border-color:#B9C7DA}
+label{font-size:13px;color:#45484C;font-weight:500}
+select,input{font:400 14px 'Jost','Segoe UI',sans-serif;border:1px solid #CBD3DE;border-radius:6px;padding:10px;color:#252728;background:#fff;box-sizing:border-box}
+.muted{color:#646569}
+code{font-family:Consolas,'Courier New',monospace;font-size:13px}
+.step{display:flex;gap:14px}
+.num{width:32px;height:32px;border-radius:50%;background:#E8F0FA;color:#114984;font-weight:500;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none}
+.rail{width:2px;flex:1;background:#D7E1EE;margin:4px auto 0}
+</style>
+</head>
+<body>
+
+<div style="min-height:100vh;display:flex;flex-direction:column">
+<header style="background:#114984;color:#fff;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:10px 24px;min-height:64px;box-sizing:border-box;border-bottom:3px solid #0E8943">
+<div style="display:flex;align-items:center;gap:12px">
+<div role="img" aria-label="Logo placeholder – replace with official TVS Credit logo" style="width:120px;height:36px;border:1px dashed #C9D8EA;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff">TVS Credit logo</div>
+<div style="font-size:19px;font-weight:500">Regulatory Monitor</div>
+<span class="b" style="background:#0E8943;color:#fff">POC</span>
+</div>
+<div style="flex:1"></div>
+<a class="btn btn-g" href="03-source-health.html">Run now</a>
+<div style="font-size:14px;color:#fff">Audit team · Viewer</div>
+</header>
+<div style="display:flex;flex-wrap:wrap;flex:1">
+<nav class="nav" aria-label="Main" style="flex:1 1 220px;padding:20px 12px;display:flex;flex-direction:column;gap:4px;background:#fff;border-right:1px solid #E3E7ED;box-sizing:border-box">
+<a href="01-daily-review.html">Daily review</a>
+<a href="03-source-health.html">Source health</a>
+<a href="02-email-preview.html">Email preview</a>
+<a class="on" href="05-item-history.html" aria-current="page">Item history</a>
+<div style="font-size:12px;color:#646569;padding:16px 14px 4px">Admin</div>
+<a href="04-sources-admin.html">Sources</a>
+<a href="#">Settings</a>
+<a href="#">Audit log</a>
+</nav>
+<main style="flex:999 1 560px;min-width:0;padding:28px 32px;display:flex;flex-direction:column;gap:20px;box-sizing:border-box">
+
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px">
+<div>
+<h1 style="margin:0;font-size:28px;font-weight:500;color:#114984">Item history</h1>
+<p style="margin:4px 0 0;font-size:15px" class="muted">Find any item and see exactly how it travelled from the regulator’s website to the email</p>
+</div>
+<button type="button" class="btn btn-o">Export trail (CSV)</button>
+</div>
+
+<form class="card" role="search" style="padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+<div style="flex:3 1 280px;display:flex;flex-direction:column;gap:6px"><label for="h-q">Title or reference no.</label><input id="h-q" value="IoRS" style="width:100%"></div>
+<div style="flex:1 1 140px;display:flex;flex-direction:column;gap:6px"><label for="h-a">Authority</label><select id="h-a" style="width:100%"><option>All</option><option>RBI</option></select></div>
+<div style="flex:1 1 140px;display:flex;flex-direction:column;gap:6px"><label for="h-f">From</label><input id="h-f" value="01.11.2026" style="width:100%"></div>
+<div style="flex:1 1 140px;display:flex;flex-direction:column;gap:6px"><label for="h-t">To</label><input id="h-t" value="21.11.2026" style="width:100%"></div>
+<button type="button" class="btn btn-p">Search</button>
+</form>
+
+<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+<section class="card" aria-label="Results" style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column">
+<div style="padding:12px 16px;border-bottom:1px solid #E3E7ED;font-size:14px" class="muted">2 results</div>
+<a href="#" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#F2F7FD;border-bottom:1px solid #EDF0F4;text-decoration:none;color:#252728">
+<span style="font-weight:500;color:#114984">Inter-operable Regulatory Sandbox: IoRS – FAQs</span>
+<span class="muted" style="font-size:13px">RBI · TVSC-REG-2026-000214 · Modified 20.11.2026</span>
+</a>
+<a href="#" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;text-decoration:none;color:#252728">
+<span style="font-weight:500;color:#114984">Inter-operable Regulatory Sandbox: IoRS – FAQs</span>
+<span class="muted" style="font-size:13px">RBI · TVSC-REG-2026-000214 · First seen 03.11.2026 (sample)</span>
+</a>
+</section>
+
+<section class="card" aria-label="Traceability chain" style="flex:999 1 560px;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:4px">
+<h2 style="margin:0 0 14px;font-size:18px;font-weight:500">Traceability · TVSC-REG-2026-000214</h2>
+
+<div class="step"><div style="display:flex;flex-direction:column"><div class="num">1</div><div class="rail"></div></div>
+<div style="padding-bottom:18px;display:flex;flex-direction:column;gap:4px"><div style="font-weight:500">Included in email <span class="b b-ok">Approved</span></div><div style="font-size:14px">Daily Regulatory Update – 20.11.2026 (EOD), row 1 · approved by George K. at 20:14</div><a href="02-email-preview.html" style="font-size:14px">Open email draft</a></div></div>
+
+<div class="step"><div style="display:flex;flex-direction:column"><div class="num">2</div><div class="rail"></div></div>
+<div style="padding-bottom:18px;display:flex;flex-direction:column;gap:4px"><div style="font-weight:500">Review decision</div><div style="font-size:14px">Accepted by Divya G. at 19:48 · Treatment: Information only · Applicability: Yes · Status: Yet to start</div><div class="muted" style="font-size:13px">Fields edited by reviewer: Impact on TVSCS, Status</div></div></div>
+
+<div class="step"><div style="display:flex;flex-direction:column"><div class="num">3</div><div class="rail"></div></div>
+<div style="padding-bottom:18px;display:flex;flex-direction:column;gap:4px"><div style="font-weight:500">Document stored</div><div style="font-size:14px">FAQ page saved 20.11.2026 19:31 · text extracted</div><div style="font-size:13px" class="muted">SHA-256 <code>8b04e1…a7d2</code> · <a href="#">Open stored copy</a></div></div></div>
+
+<div class="step"><div style="display:flex;flex-direction:column"><div class="num">4</div><div class="rail"></div></div>
+<div style="padding-bottom:18px;display:flex;flex-direction:column;gap:4px"><div style="font-weight:500">Change detected <span class="b b-mod">Modified</span></div><div style="font-size:14px">Same fingerprint as 03.11.2026, content hash changed · seen in RSS and HTML</div><div style="font-size:13px" class="muted">Before <code>c41d…09ef</code> → after <code>8b04…a7d2</code> · <a href="#">Show differences</a></div></div></div>
+
+<div class="step"><div style="display:flex;flex-direction:column"><div class="num">5</div><div class="rail"></div></div>
+<div style="padding-bottom:18px;display:flex;flex-direction:column;gap:4px"><div style="font-weight:500">Listing snapshot</div><div style="font-size:14px">RBI FAQs page fetched 20.11.2026 19:31 by the end-of-day run</div><div style="font-size:13px" class="muted">SHA-256 <code>3f9a77…c21e</code> · <a href="#">Open snapshot</a></div></div></div>
+
+<div class="step"><div style="display:flex;flex-direction:column"><div class="num">6</div><div class="rail" style="background:transparent"></div></div>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font-weight:500">Source configuration</div><div style="font-size:14px">RBI · FAQs, version 1 · approved by George K. on 19.11.2026</div><a href="04-sources-admin.html" style="font-size:14px">View source settings</a></div></div>
+</section>
+</div>
+</main>
+</div>
+</div>
+</body>
+</html>
