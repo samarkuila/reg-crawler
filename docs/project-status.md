@@ -14,7 +14,7 @@ Planning is complete (brief, PRD, tech stack, architecture, component architectu
 | # | Milestone | Planned | Status | Notes |
 |---|---|---|---|---|
 | M0 | Specs & setup | 21–23.11 | 🟢 Docs done · 🟢 Prompt 0 scaffold (23.11) | Runs on existing venv + pip (Python 3.14); uv/GNU make not installed — see decision 23.11 D11 |
-| M1 | UI on mock data (Prompts 1–6) | 24–25.11 | 🟡 In progress (design system done; browser visual check pending) | Mockups approved |
+| M1 | UI on mock data (Prompts 1–6) | 24–25.11 | 🟡 In progress · Prompt 1 design system done (23.11) | Mockups approved. Open: /styleguide not yet visually checked in a browser against the mockups; official logo pending from Brand (placeholder in use) |
 | M2 | Database (Prompts 7–8) | 26.11 | ⚪ Not started | |
 | M3 | Crawler wave 1 (Prompts 9–11) | 26–27.11 | ⚪ Not started | Needs outbound internet |
 | M4 | Detection & run control (Prompts 12–13) | 28.11 | ⚪ Not started | |
@@ -103,3 +103,4 @@ Exceptions: D11 deviates from the "uv, Python 3.12" stack line in CLAUDE.md.
 |---|---|
 | 21.11.2026 | Planning pack v0.1 |
 | 23.11.2026 | Added component architecture, system design, constraints & policies, repo etiquette, project status; Luna agent spec; Prompt 13b |
+| 23.11.2026 | Prompt 1 done: design system (tokens, components, Jost, base layout, ui.js/api.js, /styleguide); tests and lint green |
