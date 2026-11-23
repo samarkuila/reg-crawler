@@ -26,6 +26,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.db.types import TZDateTime, enum_column, new_id
 from app.schemas.enums import (
+    AlertKind,
     Applicability,
     ChangeType,
     Channel,
@@ -126,6 +127,7 @@ class CrawlRun(Base):
     status: Mapped[RunStatus] = mapped_column(
         enum_column(RunStatus, "crawl_run_status"), default=RunStatus.RUNNING
     )
+    sources: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)  # None = all sources
 
 
 class Snapshot(Base):
@@ -155,6 +157,23 @@ class SourceCheck(Base):
     items_found: Mapped[int | None] = mapped_column(Integer)
     error_detail: Mapped[str | None] = mapped_column(Text)
     snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("snapshot.id"))
+
+
+class Alert(Base):
+    """(added, Prompt 13) Post-run alerts: shown as a banner, kept for V2 notifications."""
+
+    __tablename__ = "alert"
+    __table_args__ = (Index("ix_alert_run_id", "run_id"),)
+
+    id: Mapped[str] = _id()
+    run_id: Mapped[str | None] = mapped_column(ForeignKey("crawl_run.id"))
+    kind: Mapped[AlertKind] = mapped_column(enum_column(AlertKind, "alert_kind"))
+    severity: Mapped[str] = mapped_column(String(10), default="warning")
+    source_id: Mapped[str | None] = mapped_column(ForeignKey("source.id"))
+    item_id: Mapped[str | None] = mapped_column(ForeignKey("regulatory_item.id"))
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime)
+    delivered_at: Mapped[datetime | None] = mapped_column(TZDateTime)
 
 
 class RawListingItem(Base):

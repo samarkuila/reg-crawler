@@ -79,6 +79,7 @@ M1_ADDITIONS = {
     "source_version": {"decided_at", "reject_reason"},
     "regulatory_item": {"summary"},
     "document": {"filename", "needs_ocr"},
+    "crawl_run": {"sources"},
     "review_decision": {"is_draft"},
     "daily_update": {"prepared_by", "exported_at"},
 }
@@ -90,7 +91,8 @@ CONFIG_TABLES = {
     "sender_name version",
     "setting": "key value version description updated_by updated_at pending",
 }
-EXTRA_TABLES = {"internal_ref_counter", "raw_listing_item"}  # raw_listing_item: Prompt 9
+# raw_listing_item: Prompt 9; alert: Prompt 13
+EXTRA_TABLES = {"internal_ref_counter", "raw_listing_item", "alert"}
 
 
 def columns(engine: Engine, table: str) -> set[str]:

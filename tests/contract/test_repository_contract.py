@@ -38,6 +38,8 @@ MUTATING = {
     "record_snapshot",
     "add_raw_items",
     "save_detection",
+    "close_run",
+    "add_alerts",
     "mark_items_seen",
     "add_manual_check",
     "add_document",

@@ -6,11 +6,12 @@ repositories expose no update/delete for them.
 """
 
 from datetime import UTC, date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.enums import (
+    AlertKind,
     Applicability,
     ChangeType,
     Channel,
@@ -86,6 +87,7 @@ class CrawlRun(Entity):
     started_at: datetime
     ended_at: datetime | None = None
     status: RunStatus = RunStatus.RUNNING
+    sources: list[str] | None = None  # (added, Prompt 13) source ids this run covers; None = all
 
 
 class SourceCheck(Entity):
@@ -110,6 +112,24 @@ class Snapshot(Entity):
     fetched_at: datetime
     sha256: str
     path: str
+
+
+class Alert(Entity):
+    """(added, Prompt 13) Something a person should look at after a run.
+
+    Shown as a banner now; `delivered_at` is for the V2 Teams/email notifier, which sends the
+    alerts it has not delivered yet. Alerts are never deleted.
+    """
+
+    id: str
+    run_id: str | None = None
+    kind: AlertKind
+    severity: Literal["urgent", "warning"] = "warning"
+    source_id: str | None = None
+    item_id: str | None = None
+    message: str
+    created_at: datetime
+    delivered_at: datetime | None = None
 
 
 class RawListingItem(Entity):

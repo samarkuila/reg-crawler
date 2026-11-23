@@ -158,6 +158,9 @@ legend{font-size:var(--fs-13);color:var(--c-grey-700);font-weight:var(--fw-mediu
 .alert-body{flex:1 1 300px;font-size:var(--fs-14);color:var(--c-danger-ink)}
 .alert-body strong{font-weight:var(--fw-medium)}
 
+.alert-stack{display:flex;flex-direction:column;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+.alert-stack[hidden]{display:none}
+
 /* ---------- Drawer / aside ---------- */
 .drawer{display:flex;flex-direction:column;min-width:0}
 .drawer-head{padding:var(--sp-4) var(--sp-4h);border-bottom:1px solid var(--c-border);display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-3)}

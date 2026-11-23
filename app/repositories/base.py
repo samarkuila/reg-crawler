@@ -9,6 +9,7 @@ from typing import Any, Protocol
 
 from app.schemas.api import CycleRef, ItemFilter
 from app.schemas.entities import (
+    Alert,
     AppUser,
     AuditEvent,
     CrawlRun,
@@ -29,7 +30,7 @@ from app.schemas.entities import (
     SourceCheck,
     SourceVersion,
 )
-from app.schemas.enums import Cycle, ItemState
+from app.schemas.enums import Cycle, ItemState, RunStatus
 
 
 class Repository(Protocol):
@@ -59,8 +60,16 @@ class Repository(Protocol):
     def get_run(self, run_id: str) -> CrawlRun | None: ...
     def find_runs(self, ref: CycleRef) -> list[CrawlRun]: ...
     def create_run(
-        self, cycle: Cycle, cycle_date: date, triggered_by: str, actor: str
+        self,
+        cycle: Cycle,
+        cycle_date: date,
+        triggered_by: str,
+        actor: str,
+        sources: list[str] | None = None,
     ) -> CrawlRun: ...
+    def close_run(self, run_id: str, status: RunStatus, actor: str) -> CrawlRun: ...
+    def add_alerts(self, alerts: list[Alert], actor: str) -> list[Alert]: ...
+    def list_alerts(self, run_id: str | None = None) -> list[Alert]: ...
     def list_source_checks(self, run_id: str | None = None) -> list[SourceCheck]: ...
     def get_source_check(self, check_id: str) -> SourceCheck | None: ...
     def record_source_check(self, check: SourceCheck, actor: str) -> SourceCheck: ...

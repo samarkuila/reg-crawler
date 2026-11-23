@@ -53,11 +53,10 @@ from app.services.errors import (
     ConflictError,
     InvalidError,
     NotFoundError,
-    NotImplementedYet,
     TooLargeError,
 )
 from app.services.formatting import CYCLE_NAMES, fmt_date, fmt_time
-from app.services.permissions import REVIEW_ROLES, RUN_ROLES, require_role
+from app.services.permissions import REVIEW_ROLES, require_role
 from app.services.prefill_rules import applicability_hint, effective_date
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -120,12 +119,13 @@ class ReviewService:
             raise NotFoundError(f"Run {run_id} not found")
         checks = self._ordered_checks(run_id)
         active = {s.id for s in self._repo.list_sources() if s.active}
+        scope = set(run.sources) if run.sources else active  # a one-source run counts one source
         done = {c.source_id for c in checks}
         return RunDetail(
             run=run,
             checks=[self.check_view(c) for c in checks],
-            sources_total=len(active),
-            sources_done=len(done & active),
+            sources_total=len(scope),
+            sources_done=len(done & scope),
         )
 
     def _ordered_checks(self, run_id: str) -> list[SourceCheck]:
@@ -220,12 +220,6 @@ class ReviewService:
         if self._repo.get_manual_check(check_id) is not None:
             raise ConflictError("This source has already been marked as checked manually.")
         return self._repo.add_manual_check(check_id, user.name, note, user.name)
-
-    def start_crawl(self, user: AppUser, source_id: str | None) -> None:
-        require_role(user, RUN_ROLES, "start a crawl")
-        if source_id is not None and self._repo.get_source(source_id) is None:
-            raise NotFoundError(f"Source {source_id} not found")
-        raise NotImplementedYet("Running a crawl from the app is not built yet (Prompt 13).")
 
     # --- items -------------------------------------------------------------------------------
 

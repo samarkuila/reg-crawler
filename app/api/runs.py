@@ -11,7 +11,7 @@ from app.schemas.api import (
     RunDetail,
     SourceHealthSummary,
 )
-from app.schemas.entities import AppUser, CrawlRun, ManualCheck
+from app.schemas.entities import Alert, AppUser, CrawlRun, ManualCheck
 from app.services import Services
 
 router = APIRouter(tags=["runs"])
@@ -30,13 +30,31 @@ def get_run(run_id: str, services: Services = Depends(get_services)) -> RunDetai
     return services.review.run_detail(run_id)
 
 
-@router.post("/crawl/run", status_code=202, summary="Start an ad-hoc run (not built yet: 501)")
+@router.post(
+    "/crawl/run",
+    response_model=CrawlRun,
+    status_code=202,
+    summary="Run now: crawl every active source, or one (409 if a run is already going)",
+)
 def start_crawl(
     body: CrawlRunIn | None = None,
     user: AppUser = Depends(current_user),
     services: Services = Depends(get_services),
-) -> None:
-    services.review.start_crawl(user, body.source_id if body else None)
+) -> CrawlRun:
+    """Starts the run in the background and returns it at once; follow it with GET /runs/{id}."""
+    return services.crawl.start_for(user, body.source_id if body else None)
+
+
+@router.get(
+    "/alerts",
+    response_model=list[Alert],
+    summary="Alerts of a run (default: the latest run), urgent first",
+)
+def list_alerts(
+    run_id: str | None = Query(None),
+    services: Services = Depends(get_services),
+) -> list[Alert]:
+    return services.alerts.latest(run_id)
 
 
 @router.get(

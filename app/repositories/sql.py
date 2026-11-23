@@ -33,6 +33,7 @@ from app.db.session import make_session_factory, session_scope
 from app.schemas.api import CycleRef, ItemFilter
 from app.schemas.entities import (
     IST,
+    Alert,
     AppUser,
     AuditEvent,
     CrawlRun,
@@ -65,6 +66,7 @@ _ENTITY_TO_MODEL: dict[type[BaseModel], type[m.Base]] = {
     SourceCheck: m.SourceCheck,
     Snapshot: m.Snapshot,
     RawListingItem: m.RawListingItem,
+    Alert: m.Alert,
     RegulatoryItem: m.RegulatoryItem,
     ItemObservation: m.ItemObservation,
     Document: m.Document,
@@ -435,7 +437,14 @@ class SqlRepository:
     def find_runs(self, ref: CycleRef) -> list[CrawlRun]:
         return [r for r in self.list_runs(ref.cycle_date) if r.cycle == ref.cycle]
 
-    def create_run(self, cycle: Cycle, cycle_date: date, triggered_by: str, actor: str) -> CrawlRun:
+    def create_run(
+        self,
+        cycle: Cycle,
+        cycle_date: date,
+        triggered_by: str,
+        actor: str,
+        sources: list[str] | None = None,
+    ) -> CrawlRun:
         with self._tx() as session:
             run = CrawlRun(
                 id=new_id("run"),
@@ -444,10 +453,50 @@ class SqlRepository:
                 triggered_by=triggered_by,
                 started_at=now_ist(),
                 status=RunStatus.RUNNING,
+                sources=list(sources) if sources is not None else None,
             )
             session.add(_to_row(m.CrawlRun, run))
             self._audit(session, actor, "crawl_run.created", "crawl_run", run.id, None, _dump(run))
             return run.model_copy(deep=True)
+
+    def close_run(self, run_id: str, status: RunStatus, actor: str) -> CrawlRun:
+        with self._tx() as session:
+            row = session.get(m.CrawlRun, run_id)
+            if row is None:
+                raise KeyError(run_id)
+            before = _dump(_to_entity(CrawlRun, row))
+            row.status = status
+            row.ended_at = now_ist()
+            session.flush()
+            after = _to_entity(CrawlRun, row)
+            self._audit(
+                session, actor, "crawl_run.closed", "crawl_run", run_id, before, _dump(after)
+            )
+            return after
+
+    def add_alerts(self, alerts: list[Alert], actor: str) -> list[Alert]:
+        if not alerts:
+            return []
+        with self._tx() as session:
+            for alert in alerts:
+                session.add(_to_row(m.Alert, alert))
+            self._audit(
+                session,
+                actor,
+                "alerts.recorded",
+                "crawl_run",
+                alerts[0].run_id or alerts[0].id,
+                None,
+                {"count": len(alerts), "kinds": sorted({a.kind.value for a in alerts})},
+            )
+            return [a.model_copy(deep=True) for a in alerts]
+
+    def list_alerts(self, run_id: str | None = None) -> list[Alert]:
+        with self._tx() as session:
+            stmt = select(m.Alert).order_by(m.Alert.created_at, m.Alert.id)
+            if run_id is not None:
+                stmt = stmt.where(m.Alert.run_id == run_id)
+            return [_to_entity(Alert, r) for r in session.scalars(stmt)]
 
     def list_source_checks(self, run_id: str | None = None) -> list[SourceCheck]:
         with self._tx() as session:
