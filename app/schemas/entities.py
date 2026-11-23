@@ -112,6 +112,26 @@ class Snapshot(Entity):
     path: str
 
 
+class RawListingItem(Entity):
+    """(added, Prompt 9) One row exactly as a spider read it from a listing, feed or list.
+
+    Detection (Prompt 12) turns these into fingerprints, items and observations. The crawler
+    never decides what is new, so nothing here is a regulatory item yet.
+    """
+
+    id: str
+    run_id: str
+    source_id: str
+    channel: CheckChannel
+    snapshot_id: str | None = None
+    title: str
+    url: str  # canonical URL
+    ref_no: str | None = None
+    displayed_date: date | None = None  # as shown on the site; never used to decide "new"
+    raw_extra: dict[str, Any] = Field(default_factory=dict)
+    fetched_at: datetime
+
+
 class RegulatoryItem(Entity):
     id: str
     internal_ref: str  # TVSC-REG-YYYY-NNNNNN

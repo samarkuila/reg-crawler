@@ -145,6 +145,8 @@ erDiagram
 
 **Built schema (Prompt 7):** `app/db/models.py` and migration `0001`; see `docs/data-model.md` (ER diagram, indexes, deviations) and `docs/postgres-migration.md`.
 
+**Crawler writes (Prompt 9).** The Scrapy pipelines write only through the repository: `record_snapshot(snapshot, content, actor)` (row + write-once file + audit event in one transaction; refuses content whose SHA-256 differs), `add_raw_items(items, actor)` (one audit event per batch) and `record_source_check`. Raw rows go to the new table `raw_listing_item` (see `docs/data-model.md`, deviation 7); Detection turns them into items and observations.
+
 **Integrity:** triggers reject UPDATE/DELETE on `snapshot`, `document`, `audit_event`; files written once to `data/snapshots/{source}/{date}/{sha256}` and `data/documents/{internal_ref}/{sha256}.{ext}`.
 
 ### Fingerprint and change rules
@@ -210,11 +212,17 @@ reg-monitor/
 │  └─ static/ (css/tokens.css, css/components.css, js/api.js, js/ui.js, js/pages/*.js, fonts/, img/)
 ├─ crawler/
 │  ├─ scrapy.cfg
-│  └─ regcrawler/ (settings.py, items.py, middlewares.py, pipelines.py, spiders/{rss,listing,unsc_xml}.py)
+│  └─ regcrawler/ (settings.py, config.py, state.py, repo.py, items.py, middlewares.py, pipelines.py, spiders/{base,rss,listing,unsc_xml}.py)
 ├─ config/ (sources.yaml, settings.yaml)
 ├─ data/ (gitignored: reg_monitor.db, snapshots/, documents/, logs/)
 └─ tests/ (unit/, api/, contract/, crawler/, fixtures/{rss,html,xml})
 ```
+
+### Crawler foundation (Prompt 9)
+- **Settings** (`crawler/regcrawler/settings.py`): robots.txt obeyed; User-Agent `TVSCredit-RegMonitor/0.1 (+<crawler.contact from config/settings.yaml>)`; AutoThrottle on; `DOWNLOAD_DELAY=2` with jitter off (Scrapy 2.20 `DOWNLOAD_DELAY_JITTER=0`, so no gap is shorter than 2 s); one request at a time per domain; timeout 30 s; retries (2) only for 500/502/503/504/522/524 and timeouts, never 403/429; cookies off; HTTP cache only with `REGCRAWLER_PROFILE=dev`; logs in `data/logs/`. Paths and the database are anchored to the repository root, and `REPO_BACKEND` defaults to `sql` in a crawl.
+- **Spider arguments:** `-a source=<id> -a run_id=<id>`. The source is loaded from the database; an unknown or inactive source, or an unknown run, is refused. Spiders extend `BaseRegSpider` (`spiders/base.py`) and use Scrapy 2.13+ `async def start()`.
+- **BlockDetectionMiddleware** (priority 560, after redirect/decompression, before retry): HTTP 401/403/429, a redirect into a login page, or a challenge page (markers in `config/settings.yaml` → `crawler.block_markers`, matched in the page title, or anywhere in a page under 32 KB) records the channel as `BLOCKED`, drops every later request for that source, and never retries. Nothing else is done. A false positive is visible (BLOCKED with a manual-fetch path) and never hides data.
+- **Pipelines:** `SnapshotPipeline` (bytes → `data/snapshots/{source}/{date}/{sha256}`, snapshot row) → `NormalisePipeline` (`app/services/normalise.py`: canonical URL, ISO date, reference number, clean title; never drops a row) → `DbPipeline` (rows buffered, written with the `source_check` per channel when the spider closes: `OK`, `ZERO_ITEMS`, `BLOCKED`, `FAILED`). A channel never fetched after a block is `BLOCKED` too; one never fetched for another reason (e.g. robots.txt) is `FAILED`.
 
 ### Example source configuration (`config/sources.yaml`)
 The real file is `config/sources.yaml` (Prompt 8). It stores the row/title/link/date selectors under `adapter_config.selectors` (the form on the Sources page writes the same shape), not flat as in the example below. Load it with `python -m app.cli import-sources config/sources.yaml --actor "<name>"`: it only proposes PENDING versions and is safe to run again.

@@ -1,13 +1,29 @@
-# Define here the models for your scraped items
-#
-# See documentation in:
-# https://docs.scrapy.org/en/latest/topics/items.html
+"""Scrapy items. Spiders emit these; they never decide what is new (CLAUDE.md rule 6)."""
 
-from dataclasses import dataclass
+import scrapy
 
 
-@dataclass
-class RegcrawlerItem:
-    # define the fields for your item here like:
-    # name: str | None = None
-    pass
+class ListingItem(scrapy.Item):
+    """One row read from a feed, listing page or data file."""
+
+    source_id = scrapy.Field()
+    run_id = scrapy.Field()
+    channel = scrapy.Field()  # "RSS" | "HTML" | "XML"
+    title = scrapy.Field()
+    url = scrapy.Field()
+    ref_no = scrapy.Field()
+    displayed_date = scrapy.Field()  # as read; the NormalisePipeline turns it into a date
+    raw_extra = scrapy.Field()  # dict: description HTML, guid, anything else worth keeping
+    snapshot_id = scrapy.Field()  # filled by SnapshotPipeline
+
+
+class SnapshotItem(scrapy.Item):
+    """The raw bytes of one fetched page. Consumed by SnapshotPipeline, which drops the bytes."""
+
+    source_id = scrapy.Field()
+    run_id = scrapy.Field()
+    channel = scrapy.Field()
+    url = scrapy.Field()
+    body = scrapy.Field()
+    http_status = scrapy.Field()
+    snapshot_id = scrapy.Field()

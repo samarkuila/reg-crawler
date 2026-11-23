@@ -157,6 +157,27 @@ class SourceCheck(Base):
     snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("snapshot.id"))
 
 
+class RawListingItem(Base):
+    """(added, Prompt 9) Listing rows as read by a spider, before detection decides anything."""
+
+    __tablename__ = "raw_listing_item"
+    __table_args__ = (Index("ix_raw_listing_item_run_source", "run_id", "source_id"),)
+
+    id: Mapped[str] = _id()
+    run_id: Mapped[str] = mapped_column(ForeignKey("crawl_run.id"))
+    source_id: Mapped[str] = mapped_column(ForeignKey("source.id"))
+    channel: Mapped[CheckChannel] = mapped_column(
+        enum_column(CheckChannel, "raw_listing_item_channel")
+    )
+    snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("snapshot.id"))
+    title: Mapped[str] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(Text)
+    ref_no: Mapped[str | None] = mapped_column(String(200))
+    displayed_date: Mapped[date | None] = mapped_column(Date)
+    raw_extra: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    fetched_at: Mapped[datetime] = mapped_column(TZDateTime)
+
+
 class ManualCheck(Base):
     __tablename__ = "manual_check"
 

@@ -4,8 +4,10 @@ If a test passes on one backend and fails on the other, the backends disagree an
 behave differently. `test_both_backends_return_identical_results` compares them side by side.
 """
 
+import hashlib
 import inspect
 import re
+import sqlite3
 from datetime import date
 
 import pytest
@@ -17,10 +19,13 @@ from app.schemas.entities import (
     DailyUpdate,
     DailyUpdateItem,
     Document,
+    RawListingItem,
     ReviewDecision,
+    Snapshot,
     SourceVersion,
+    now_ist,
 )
-from app.schemas.enums import Cycle, FetchStatus, ItemState, Treatment, UpdateStatus
+from app.schemas.enums import CheckChannel, Cycle, FetchStatus, ItemState, Treatment, UpdateStatus
 from tests.conftest import BACKENDS, make_backend
 
 MUTATING = {
@@ -30,6 +35,8 @@ MUTATING = {
     "reject_source_version",
     "create_run",
     "record_source_check",
+    "record_snapshot",
+    "add_raw_items",
     "add_manual_check",
     "add_document",
     "save_decisions",
@@ -518,3 +525,90 @@ def test_the_same_changes_give_the_same_result_on_both_backends(both) -> None:
     a, b = run_script(memory), run_script(sql)
     # decided_at of decisions is fixed in the script, so those compare exactly too
     assert a == b
+
+
+# ---------- crawler writes (Prompt 9) ----------
+
+SEEDED_SOURCE = "rbi"  # a source id in the demo seed
+PAGE = b"<html><body>RBI notifications listing</body></html>"
+
+
+def crawl_snapshot(content: bytes = PAGE, snap_id: str = "snap-crawl-1") -> Snapshot:
+    digest = hashlib.sha256(content).hexdigest()
+    source = SEEDED_SOURCE
+    return Snapshot(
+        id=snap_id,
+        source_id=source,
+        channel=CheckChannel.HTML,
+        url="https://rbi.org.in/notifications",
+        fetched_at=now_ist(),
+        sha256=digest,
+        path=f"data/snapshots/{source}/2026-11-23/{digest}",
+    )
+
+
+def crawl_run(repo):
+    return repo.create_run(Cycle.ADHOC, date(2026, 11, 23), "tester", "tester")
+
+
+def test_record_snapshot_stores_row_file_and_audit_event(repo) -> None:
+    before = len(repo.list_audit())
+    repo.record_snapshot(crawl_snapshot(), PAGE, "crawler")
+    assert repo.get_snapshot("snap-crawl-1").sha256 == hashlib.sha256(PAGE).hexdigest()
+    assert repo.read_blob(hashlib.sha256(PAGE).hexdigest()) == PAGE
+    assert len(repo.list_audit()) == before + 1
+    assert repo.list_audit()[0].action == "snapshot.recorded"
+
+
+def test_record_snapshot_refuses_content_that_does_not_match_the_hash(repo) -> None:
+    before = len(repo.list_audit())
+    with pytest.raises(ValueError):
+        repo.record_snapshot(crawl_snapshot(), b"something else", "crawler")
+    assert repo.get_snapshot("snap-crawl-1") is None
+    assert len(repo.list_audit()) == before
+
+
+def test_a_snapshot_cannot_be_recorded_twice_under_one_id(repo) -> None:
+    repo.record_snapshot(crawl_snapshot(), PAGE, "crawler")
+    with pytest.raises(Exception):  # noqa: B017 - the two backends raise different error types
+        repo.record_snapshot(crawl_snapshot(), PAGE, "crawler")
+
+
+def test_raw_listing_items_are_stored_per_run_and_source(repo) -> None:
+    run = crawl_run(repo)
+    repo.record_snapshot(crawl_snapshot(), PAGE, "crawler")
+    items = [
+        RawListingItem(
+            id=f"raw-{n}",
+            run_id=run.id,
+            source_id=SEEDED_SOURCE,
+            channel=CheckChannel.HTML,
+            snapshot_id="snap-crawl-1",
+            title=f"Notification {n}",
+            url=f"https://rbi.org.in/n/{n}",
+            ref_no=f"RBI/2026-27/{n}",
+            displayed_date=date(2026, 11, 20),
+            raw_extra={"n": n},
+            fetched_at=now_ist(),
+        )
+        for n in (1, 2)
+    ]
+    before = len(repo.list_audit())
+    repo.add_raw_items(items, "crawler")
+    assert [i.id for i in repo.list_raw_items(run.id)] == ["raw-1", "raw-2"]
+    assert repo.list_raw_items(run.id, "some-other-source") == []
+    assert repo.list_raw_items("no-such-run") == []
+    assert len(repo.list_audit()) == before + 1  # one audit event for the batch
+
+
+def test_the_database_refuses_to_change_or_delete_a_snapshot(tmp_path, sql_template) -> None:
+    repository, url, _files = make_backend("sql", tmp_path, sql_template)
+    repository.record_snapshot(crawl_snapshot(), PAGE, "crawler")
+    con = sqlite3.connect(url.removeprefix("sqlite:///"))
+    try:
+        with pytest.raises(sqlite3.DatabaseError):
+            con.execute("UPDATE snapshot SET sha256 = 'x' WHERE id = 'snap-crawl-1'")
+        with pytest.raises(sqlite3.DatabaseError):
+            con.execute("DELETE FROM snapshot WHERE id = 'snap-crawl-1'")
+    finally:
+        con.close()

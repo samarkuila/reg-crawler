@@ -40,18 +40,12 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "crawler"]
 addopts = "-q"
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-# Untouched `scrapy startproject` boilerplate; remove these excludes when Prompt 9 rewrites the files.
-extend-exclude = [
-    "crawler/regcrawler/settings.py",
-    "crawler/regcrawler/middlewares.py",
-    "crawler/regcrawler/pipelines.py",
-]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -59,3 +53,6 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's documented dependency-injection style puts Depends()/Query() in argument defaults.
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.File", "fastapi.Form"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "regcrawler", "tests"]
