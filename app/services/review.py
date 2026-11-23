@@ -121,12 +121,12 @@ class ReviewService:
         done = {c.source_id for c in checks}
         return RunDetail(
             run=run,
-            checks=[self._check_view(c) for c in checks],
+            checks=[self.check_view(c) for c in checks],
             sources_total=len(active),
             sources_done=len(done & active),
         )
 
-    def _check_view(self, check: SourceCheck) -> SourceCheckView:
+    def check_view(self, check: SourceCheck) -> SourceCheckView:
         source = self._repo.get_source(check.source_id)
         manual = self._repo.get_manual_check(check.id)
         return SourceCheckView(
@@ -165,7 +165,7 @@ class ReviewService:
         if not runs:
             raise NotFoundError(f"No run found for cycle {ref.id}")
         run = runs[0]  # newest first
-        views = [self._check_view(c) for c in self._repo.list_source_checks(run.id)]
+        views = [self.check_view(c) for c in self._repo.list_source_checks(run.id)]
         ok_sources, manual_sources = set(), set()
         for s in active:
             mine = [v for v in views if v.source_id == s.id]

@@ -170,6 +170,9 @@ erDiagram
 | POST | `/daily-update/{id}/approve` | Approve |
 | GET | `/daily-update/{id}/export.eml` · `/export.html` | Export draft |
 | GET | `/daily-update/cycle-export.csv?cycle=` | FR-32: every captured item of the cycle (incl. low relevance and dismissed), UTF-8 CSV for Excel, blank "Compliance marking" column |
+| GET | `/source-health/grid` · `/source-health/compare?source_id=&cycle=` · `/source-health/checks/{id}/log` | FR-26: last four cycles per source and channel; RSS vs HTML comparison; check log |
+| GET | `/snapshots/{id}/content` · `/documents/{id}/content` | Stored copy, shown as text only, served after its SHA-256 is re-checked (409 if it no longer matches) |
+| GET | `/history/search?q=&authority=&from=&to=` · `/history/{item_id}/trail` · `/history/{item_id}/trail.csv` | FR-27: search all items; six-step evidence chain; chain as CSV |
 | GET/POST | `/sources`, `/sources/{id}/versions`, `/sources/{id}/versions/{v}/approve|reject` | Register + approvals |
 | GET | `/settings` · `/settings/{key}` | Settings (live value + any pending change) |
 | PUT | `/settings/{key}` | Propose a value → pending (maker) |

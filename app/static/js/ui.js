@@ -205,3 +205,48 @@ export async function confirmModal({ title, body, confirmLabel = "Confirm", canc
   });
   return result === true;
 }
+
+// ---------- Shared form helpers ----------
+/** "DD.MM.YYYY" -> "YYYY-MM-DD"; "" -> null; anything else -> undefined (invalid). */
+export function parseDisplayDate(text) {
+  const t = text.trim();
+  if (!t) return null;
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(t);
+  if (!m) return undefined;
+  const iso = `${m[3]}-${m[2]}-${m[1]}`;
+  const d = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== iso ? undefined : iso;
+}
+
+/**
+ * Ask for a required line of text in a modal. Resolves to the trimmed text, or null if cancelled.
+ * Re-opens with an error (keeping what was typed) while the text is empty.
+ */
+export async function askText({ title, intro, label, confirmLabel, danger = false }) {
+  let value = "";
+  let error = "";
+  for (;;) {
+    const body = document.createElement("div");
+    body.className = "stack gap-2";
+    body.innerHTML =
+      `<p class="text-14">${escapeHtml(intro)}</p>` +
+      `<div class="field"><label for="ask-text">${escapeHtml(label)}</label>` +
+      `<textarea id="ask-text" rows="3" maxlength="1000" required${error ? ' aria-invalid="true" aria-describedby="ask-err"' : ""}></textarea>` +
+      (error ? `<div class="field-error" id="ask-err" role="alert">${escapeHtml(error)}</div>` : "") +
+      "</div>";
+    const box = body.querySelector("textarea");
+    box.value = value;
+    const result = await openModal({
+      title,
+      body,
+      buttons: [
+        { label: "Cancel", value: false, kind: "o" },
+        { label: confirmLabel, value: true, kind: danger ? "d" : "p" },
+      ],
+    });
+    if (result !== true) return null;
+    value = box.value.trim();
+    if (value) return value;
+    error = "This is required.";
+  }
+}
