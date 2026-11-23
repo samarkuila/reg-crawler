@@ -6,26 +6,31 @@ Follow these prompts **in order**. They implement `docs/architecture.md` exactly
 
 ## How to work (read once)
 
-**Before you start**
-```
-reg-monitor/
-├─ CLAUDE.md                     ← from this pack
-└─ docs/
-   ├─ 00-project-brief.md  01-PRD.md  02-tech-stack.md  architecture.md
-   ├─ BUILD-PROMPTS.md            ← this file
-   └─ ui-mockups/01-daily-review.html … 05-item-history.html
-```
-Open the mockups in a browser once so you know the target.
+**Setup:** repo `C:\Projects\reg-crawler` (GitHub `samarkuila/reg-crawler`, private) containing
+`README.md`, `.gitignore`, `CLAUDE.md`, `docs/`. Start Claude Code there with `claude`.
 
-**Loop for every prompt**
-1. `/clear` (fresh context; CLAUDE.md reloads automatically).
-2. Prompts marked ⚙️ → press **Shift+Tab** for plan mode, review the plan, then approve.
-3. Paste the prompt.
-4. When Claude Code says done, paste the **Checkpoint prompt** (bottom of this file).
-5. Verify the acceptance items yourself (open the page, run the command).
-6. `git commit -m "<milestone>: <what>"`.
+**First session only** — paste the one-time note and the understanding check:
+```
+This repository is named reg-crawler (GitHub: samarkuila/reg-crawler). The application is still
+called "Regulatory Monitor" as in the docs. Wherever the docs say reg-monitor/, use this repo root.
+Never commit .env, data/ or any secrets; respect .gitignore.
 
-**If it drifts:** "Stop. Re-read CLAUDE.md, docs/architecture.md and the acceptance criteria of this prompt. Fix only what fails; don't change anything else."
+Read CLAUDE.md and every file in docs/ (including docs/agents/, docs/ui-mockups/ and
+docs/phase1-requirements-traceability.md). Do not write code. Reply with: (1) 10 bullets on what
+we're building, (2) the [HARD] policies, (3) the folder structure you'll follow, (4) the prompt
+order in docs/BUILD-PROMPTS.md, (5) anything unclear or contradictory across the docs.
+```
+
+**For every prompt below — 6 steps, nothing to edit, just copy and paste:**
+1. Type `/clear` and press Enter.
+2. If the prompt title has ⚙️, press **Shift+Tab** until you see *plan mode*.
+3. Copy the **whole grey box** under the prompt → paste → Enter. (Plan mode: read the plan → approve.)
+4. When Claude stops, paste the **Checkpoint prompt** (bottom of this file). Fix any ❌.
+5. Check it yourself (open the page / run the command in the Acceptance line).
+6. Paste the **"After the checkpoint is all ✅"** box under that prompt → it commits, merges, pushes and updates the status file.
+
+**If it drifts:** press Esc, then: "Stop. Re-read CLAUDE.md, docs/architecture.md and this
+prompt's acceptance criteria. Undo anything outside this prompt's scope; fix only what fails."
 
 | Milestone | Prompts |
 |---|---|
@@ -43,6 +48,19 @@ Open the mockups in a browser once so you know the target.
 
 ### Prompt 0 — Scaffold ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m0-scaffold · Milestone: M0]
+First: switch to main, pull from origin, then create and switch to branch feat/m0-scaffold.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
+The repo already contains README.md, .gitignore, CLAUDE.md and docs/ (pushed to GitHub
+samarkuila/reg-crawler). Do not overwrite docs/ or CLAUDE.md; extend README.md and .gitignore.
+The application name stays "Regulatory Monitor"; the repo root replaces reg-monitor/ in the docs.
+Besides the Makefile, create tasks.ps1 with identical targets (dev, test, lint, migrate,
+seed-demo, crawl, probe, demo) and document .\tasks.ps1 usage in README.
+
 Read CLAUDE.md and every file in docs/ (including docs/ui-mockups/). Summarise in 10 bullets
 what we are building and the non-negotiable rules, then scaffold the project exactly as in
 docs/architecture.md §6:
@@ -58,9 +76,21 @@ docs/architecture.md §6:
   ruff config, pytest config, README.md with run instructions.
 Do NOT build features yet.
 
-Acceptance: `make dev` serves http://localhost:8000/health → {"status":"ok"}; `make test` and
-`make lint` pass; `cd crawler && scrapy list` runs without error.
+Acceptance: `.\tasks.ps1 dev` serves http://localhost:8000/health → {"status":"ok"}; `.\tasks.ps1 test` and
+`.\tasks.ps1 lint` pass; `cd crawler; uv run scrapy list` runs without error (PowerShell).
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m0-scaffold with message "chore(scaffold): project skeleton [M0]", push the branch to origin,
+merge feat/m0-scaffold into main, push main to origin, then update docs/project-status.md
+(mark Prompt 0 done with today's date and any open issues), commit that as
+"docs(status): prompt 0 done [M0]" and push main.
+```
+
 
 ---
 
@@ -68,6 +98,13 @@ Acceptance: `make dev` serves http://localhost:8000/health → {"status":"ok"}; 
 
 ### Prompt 1 — Design system extracted from the mockups ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m1-design-system · Milestone: M1]
+First: switch to main, pull from origin, then create and switch to branch feat/m1-design-system.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Read CLAUDE.md "UI rules" and study docs/ui-mockups/*.html (they share one header, nav,
 card, badge, button, table, form and drawer style).
 
@@ -89,10 +126,29 @@ Move styles from the mockups into these files (no inline-style soup in templates
 
 Acceptance: /styleguide renders every component visually identical to the mockups; no
 external network requests; contrast passes WCAG AA.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m1-design-system with message "feat(ui): design system and base layout [M1]", push the branch to origin,
+merge feat/m1-design-system into main, push main to origin, then update docs/project-status.md
+(mark Prompt 1 done with today's date and any open issues), commit that as
+"docs(status): prompt 1 done [M1]" and push main.
+```
+
 
 ### Prompt 2 — Schemas, mock repository and API ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m1-api-mock · Milestone: M1]
+First: switch to main, pull from origin, then create and switch to branch feat/m1-api-mock.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Read docs/architecture.md §4 (data model) and §5 (API) and docs/01-PRD.md §4 (concepts, states).
 
 1. app/schemas/: Pydantic v2 models and enums for every entity in architecture §4
@@ -118,10 +174,29 @@ Read docs/architecture.md §4 (data model) and §5 (API) and docs/01-PRD.md §4 
 
 Acceptance: /docs lists all endpoints; tests in tests/api/ cover each endpoint on mock data;
 audit events are produced for every mutation.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m1-api-mock with message "feat(api): schemas, mock repository and API [M1]", push the branch to origin,
+merge feat/m1-api-mock into main, push main to origin, then update docs/project-status.md
+(mark Prompt 2 done with today's date and any open issues), commit that as
+"docs(status): prompt 2 done [M1]" and push main.
+```
+
 
 ### Prompt 3 — Daily Review page (J1, J3, J4, J5, J7) ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m1-daily-review · Milestone: M1]
+First: switch to main, pull from origin, then create and switch to branch feat/m1-daily-review.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Build the Daily Review page to match docs/ui-mockups/01-daily-review.html, using the design
 system and data from /api/v1 (app/templates/pages/review.html + app/static/js/pages/review.js).
 Implements FR-15 … FR-21.
@@ -143,10 +218,29 @@ Implements FR-15 … FR-21.
 Acceptance: side-by-side with the mockup the page matches; I can accept IoRS, bulk dismiss
 the low-relevance items, upload a document, mark eGazette checked; each action appears in
 GET /api/v1/audit.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m1-daily-review with message "feat(review): daily review page [M1]", push the branch to origin,
+merge feat/m1-daily-review into main, push main to origin, then update docs/project-status.md
+(mark Prompt 3 done with today's date and any open issues), commit that as
+"docs(status): prompt 3 done [M1]" and push main.
+```
+
 
 ### Prompt 4 — Email Preview page and renderer (J1, J2, J6)
 ```
+[Repo: reg-crawler · Branch: feat/m1-email-preview · Milestone: M1]
+First: switch to main, pull from origin, then create and switch to branch feat/m1-email-preview.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Build app/services/email_render.py and the Email Preview page matching
 docs/ui-mockups/02-email-preview.html. Implements FR-22 … FR-25 and PRD §9.
 
@@ -167,10 +261,29 @@ docs/ui-mockups/02-email-preview.html. Implements FR-22 … FR-25 and PRD §9.
 
 Acceptance: preview matches the mockup and Divya's original email; snapshot tests for normal,
 no-update, failed-source and SME-CC cases; system has no code path that sends mail.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m1-email-preview with message "feat(email): email preview and renderer [M1]", push the branch to origin,
+merge feat/m1-email-preview into main, push main to origin, then update docs/project-status.md
+(mark Prompt 4 done with today's date and any open issues), commit that as
+"docs(status): prompt 4 done [M1]" and push main.
+```
+
 
 ### Prompt 5 — Source Health and Item History pages (J9)
 ```
+[Repo: reg-crawler · Branch: feat/m1-health-history · Milestone: M1]
+First: switch to main, pull from origin, then create and switch to branch feat/m1-health-history.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Build two pages:
 1. Source Health matching docs/ui-mockups/03-source-health.html: current-run progress panel
    (polls GET /runs/{id} every 3 s while running), table of the last four cycles per source and
@@ -184,10 +297,29 @@ Build two pages:
 
 Acceptance: both pages match the mockups on seed data; the chain for IoRS shows all six steps
 with working links.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m1-health-history with message "feat(ui): source health and item history pages [M1]", push the branch to origin,
+merge feat/m1-health-history into main, push main to origin, then update docs/project-status.md
+(mark Prompt 5 done with today's date and any open issues), commit that as
+"docs(status): prompt 5 done [M1]" and push main.
+```
+
 
 ### Prompt 6 — Sources, Settings and Audit Log pages (J8) ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m1-admin · Milestone: M1]
+First: switch to main, pull from origin, then create and switch to branch feat/m1-admin.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Build the admin pages. Sources must match docs/ui-mockups/04-sources-admin.html; Settings and
 Audit Log have no mockup — build them from the same components and layout patterns.
 
@@ -204,7 +336,19 @@ Audit Log have no mockup — build them from the same components and layout patt
 
 Acceptance: an edit by Samarendra stays PENDING until George approves; George cannot approve
 his own edit; every change visible in the audit log.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m1-admin with message "feat(config): sources, settings and audit log pages [M1]", push the branch to origin,
+merge feat/m1-admin into main, push main to origin, then update docs/project-status.md
+(mark Prompt 6 done with today's date and any open issues), commit that as
+"docs(status): prompt 6 done [M1]" and push main.
+```
+
 
 **M1 review:** demo all pages on mock data to Divya for feedback before starting M2.
 
@@ -214,6 +358,13 @@ his own edit; every change visible in the audit log.
 
 ### Prompt 7 — SQLAlchemy models, migrations, immutability ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m2-db · Milestone: M2]
+First: switch to main, pull from origin, then create and switch to branch feat/m2-db.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Read docs/architecture.md §4. Implement app/db/models.py (SQLAlchemy 2.0 typed ORM) with every
 table and column listed there, app/db/session.py, and Alembic migrations in app/db/migrations/.
 - SQLite for POC, Postgres-compatible: UUIDs as strings, JSON columns, no SQLite-only features
@@ -225,16 +376,35 @@ table and column listed there, app/db/session.py, and Alembic migrations in app/
   crawl_run.cycle_date.
 - docs/data-model.md with a Mermaid ER diagram generated from the models.
 
-Acceptance: `make migrate` builds a fresh DB; tests prove audit_event/snapshot/document rows
+Acceptance: `.\tasks.ps1 migrate` builds a fresh DB; tests prove audit_event/snapshot/document rows
 cannot be updated or deleted; schema matches architecture §4 (list any deviation and why).
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m2-db with message "feat(db): models, migrations and immutability triggers [M2]", push the branch to origin,
+merge feat/m2-db into main, push main to origin, then update docs/project-status.md
+(mark Prompt 7 done with today's date and any open issues), commit that as
+"docs(status): prompt 7 done [M2]" and push main.
+```
+
 
 ### Prompt 8 — SQL repository, contract tests, real source register
 ```
+[Repo: reg-crawler · Branch: feat/m2-sql-repo · Milestone: M2]
+First: switch to main, pull from origin, then create and switch to branch feat/m2-sql-repo.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 1. app/repositories/sql.py implementing the same Repository Protocol; each mutation and its
    audit event in one transaction. Factory: REPO_BACKEND=sql.
 2. tests/contract/: one test suite parametrised over memory AND sql backends — identical results.
-3. `make seed-demo` loads the mockup seed data into SQLite.
+3. `.\tasks.ps1 seed-demo` loads the mockup seed data into SQLite.
 4. config/sources.yaml with the 5 POC sources in the architecture §6 format (FR-29, FR-30):
    RBI Notifications (rss_url https://rbi.org.in/notifications_rss.xml + HTML listing),
    RBI Press Releases (rss_url https://rbi.org.in/pressreleases_rss.xml + HTML listing),
@@ -266,7 +436,19 @@ cannot be updated or deleted; schema matches architecture §4 (list any deviatio
 
 Acceptance: contract tests green for both backends; UI works unchanged with REPO_BACKEND=sql;
 imported sources appear as pending approval.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m2-sql-repo with message "feat(db): SQL repository, contract tests, source register [M2]", push the branch to origin,
+merge feat/m2-sql-repo into main, push main to origin, then update docs/project-status.md
+(mark Prompt 8 done with today's date and any open issues), commit that as
+"docs(status): prompt 8 done [M2]" and push main.
+```
+
 
 ---
 
@@ -274,6 +456,13 @@ imported sources appear as pending approval.
 
 ### Prompt 9 — Scrapy foundation: settings, block detection, pipelines ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m3-scrapy-core · Milestone: M3]
+First: switch to main, pull from origin, then create and switch to branch feat/m3-scrapy-core.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Read CLAUDE.md rules 1, 2, 6, 7, 10 and docs/architecture.md §2–3.1. First check the installed
 Scrapy version's docs for spider start API, pipelines and FilesPipeline, and follow that version.
 
@@ -294,10 +483,29 @@ In crawler/regcrawler/:
 
 Acceptance: unit tests with saved fixture responses (no network) for block detection,
 snapshot immutability and normalisation.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m3-scrapy-core with message "feat(crawler): scrapy settings, block detection, pipelines [M3]", push the branch to origin,
+merge feat/m3-scrapy-core into main, push main to origin, then update docs/project-status.md
+(mark Prompt 9 done with today's date and any open issues), commit that as
+"docs(status): prompt 9 done [M3]" and push main.
+```
+
 
 ### Prompt 10 — RSS spider and UNSC XML spider
 ```
+[Repo: reg-crawler · Branch: feat/m3-rss-unsc · Milestone: M3]
+First: switch to main, pull from origin, then create and switch to branch feat/m3-rss-unsc.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 1. Spider `rss`: fetch source.rss_url with Scrapy, parse with feedparser; emit ListingItem
    (channel RSS) with title, link, pubDate, guid; keep full description HTML as document text
    (RBI notifications carry the text there). Handle malformed XML, empty feed (ZERO_ITEMS),
@@ -309,12 +517,31 @@ snapshot immutability and normalisation.
    against fixtures. If a live fetch is blocked, stop for that source and record it in
    docs/source-status.md — no workarounds.
 
-Acceptance: `scrapy crawl rss -a source=rbi-notifications -a run_id=test` works on fixtures
+Acceptance: `uv run scrapy crawl rss -a source=rbi-notifications -a run_id=test` (from crawler\) works on fixtures
 and live; UNSC diff tests cover added, removed and amended.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m3-rss-unsc with message "feat(crawler): RSS and UNSC XML spiders [M3]", push the branch to origin,
+merge feat/m3-rss-unsc into main, push main to origin, then update docs/project-status.md
+(mark Prompt 10 done with today's date and any open issues), commit that as
+"docs(status): prompt 10 done [M3]" and push main.
+```
+
 
 ### Prompt 11 — Config-driven HTML listing spider (wave 1)
 ```
+[Repo: reg-crawler · Branch: feat/m3-listing · Milestone: M3]
+First: switch to main, pull from origin, then create and switch to branch feat/m3-listing.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Spider `listing`: reads per-source adapter_config (row/title/link/date selectors, date format,
 ref_no regex, pagination depth = lookback, ministry/keyword filter). scrapy-playwright only if
 requires_js=true, with no stealth options.
@@ -330,7 +557,19 @@ return parsed rows to the Sources page test card.
 
 Acceptance: fixture tests pass for every wave-1 page; "Test this source" in the UI shows real
 parsed rows.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m3-listing with message "feat(crawler): config-driven HTML listing spider wave 1 [M3]", push the branch to origin,
+merge feat/m3-listing into main, push main to origin, then update docs/project-status.md
+(mark Prompt 11 done with today's date and any open issues), commit that as
+"docs(status): prompt 11 done [M3]" and push main.
+```
+
 
 ---
 
@@ -338,6 +577,13 @@ parsed rows.
 
 ### Prompt 12 — Detection, RSS-vs-HTML reconciliation, documents, relevance ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m4-detection · Milestone: M4]
+First: switch to main, pull from origin, then create and switch to branch feat/m4-detection.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Implement app/services/detection.py and app/services/documents.py exactly per
 docs/architecture.md §4 "Fingerprint and change rules" and FR-10 … FR-14, FR-16.
 
@@ -359,10 +605,29 @@ docs/architecture.md §4 "Fingerprint and change rules" and FR-10 … FR-14, FR-
 
 Acceptance: fixture sequences (run 1 → run 2) cover every change type, a backdated insert, an
 RSS-only item, zero items and a blocked document; Daily Review shows real detected items.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m4-detection with message "feat(detection): change detection, documents, relevance [M4]", push the branch to origin,
+merge feat/m4-detection into main, push main to origin, then update docs/project-status.md
+(mark Prompt 12 done with today's date and any open issues), commit that as
+"docs(status): prompt 12 done [M4]" and push main.
+```
+
 
 ### Prompt 13 — Crawl runner, Run now, scheduler, alerts
 ```
+[Repo: reg-crawler · Branch: feat/m4-runner · Milestone: M4]
+First: switch to main, pull from origin, then create and switch to branch feat/m4-runner.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Implement app/services/crawl_runner.py and app/services/scheduler.py per architecture §3.1.
 
 - Start run: create crawl_run, acquire lock (no overlapping runs), launch
@@ -378,10 +643,29 @@ Implement app/services/crawl_runner.py and app/services/scheduler.py per archite
 
 Acceptance: Run now completes a full run (fixture mode in tests, live in dev); Source Health and
 Daily Review update; a second Run now while running is refused politely.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m4-runner with message "feat(runner): crawl runner, run now, scheduler [M4]", push the branch to origin,
+merge feat/m4-runner into main, push main to origin, then update docs/project-status.md
+(mark Prompt 13 done with today's date and any open issues), commit that as
+"docs(status): prompt 13 done [M4]" and push main.
+```
+
 
 ### Prompt 13b — Luna NBFC Screening Agent (GPT Luna) ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m4b-luna · Milestone: M4b]
+First: switch to main, pull from origin, then create and switch to branch feat/m4b-luna.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Read docs/agents/luna-nbfc-agent.md end to end, plus CLAUDE.md rule 11 and
 docs/constraints-and-policies.md §3 (AI policy). Implement the agent exactly as specified.
 
@@ -410,7 +694,19 @@ docs/constraints-and-policies.md §3 (AI policy). Implement the agent exactly as
 Acceptance: all tests pass with FakeLlmClient (incl. fabricated-quote rejection and
 prompt-injection text in a document being ignored); with AGENT_LUNA_ENABLED=false the whole app
 works unchanged; with a real endpoint, an EOD run shows Luna suggestions on Daily Review.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m4b-luna with message "feat(agent): Luna NBFC screening agent [M4b]", push the branch to origin,
+merge feat/m4b-luna into main, push main to origin, then update docs/project-status.md
+(mark Prompt 13b done with today's date and any open issues), commit that as
+"docs(status): prompt 13b done [M4b]" and push main.
+```
+
 
 ---
 
@@ -418,7 +714,14 @@ works unchanged; with a real endpoint, an EOD run shows Luna suggestions on Dail
 
 ### Prompt 14 — Source probe (run on the TVS network)
 ```
-Create `make probe` (python -m app.cli probe): for every source (active or not) make ONE polite
+[Repo: reg-crawler · Branch: feat/m5-probe · Milestone: M5]
+First: switch to main, pull from origin, then create and switch to branch feat/m5-probe.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
+Create `.\tasks.ps1 probe` (python -m app.cli probe): for every source (active or not) make ONE polite
 request to the listing URL, the RSS URL if any, and one linked document. Write
 docs/probe-report.md and .csv: source, channel, URL, HTTP status, response time, robots allowed,
 blocked/captcha detected, items parsed, 3 sample titles, document downloadable, recommended
@@ -426,13 +729,32 @@ channel (RSS / HTML / JS-rendered / Email alert / Manual), notes. Never retry bl
 Save responses as fixtures.
 
 Acceptance: report generated; I will run it from the TVS office network and share results.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m5-probe with message "feat(cli): source probe [M5]", push the branch to origin,
+merge feat/m5-probe into main, push main to origin, then update docs/project-status.md
+(mark Prompt 14 done with today's date and any open issues), commit that as
+"docs(status): prompt 14 done [M5]" and push main.
+```
+
 
 ### Prompt 15 — Demo script, shadow comparison, POC readout ⚙️
 ```
+[Repo: reg-crawler · Branch: feat/m5-demo · Milestone: M5]
+First: switch to main, pull from origin, then create and switch to branch feat/m5-demo.
+Follow CLAUDE.md, docs/architecture.md, docs/component-architecture.md,
+docs/constraints-and-policies.md and docs/repository-etiquette.md.
+We are on Windows: run project commands with .\tasks.ps1 <target>.
+
+TASK:
 Prepare the POC evaluation per docs/00-project-brief.md §5 and docs/01-PRD.md §10.
 
-1. `make demo`: fresh DB → import sources → approve as George → live EOD run → open UI.
+1. `.\tasks.ps1 demo`: fresh DB → import sources → approve as George → live EOD run → open UI.
    docs/demo-script.md: a 10-minute walkthrough of J1–J9 for Compliance, in plain language.
 2. `python -m app.cli compare --manual <folder of .eml/.msg/.html daily emails> --from DD.MM.YYYY
    --to DD.MM.YYYY`: parse the manual email tables; match rows to detected items (ref no. →
@@ -443,7 +765,19 @@ Prepare the POC evaluation per docs/00-project-brief.md §5 and docs/01-PRD.md �
 4. docs/user-guide.md: one page for Compliance users (NFR-03).
 
 Acceptance: compare works on the sample (IoRS FAQs; PIB 2336151); demo runs end to end.
+
+When finished: run .\tasks.ps1 test and .\tasks.ps1 lint, then STOP and wait for my
+checkpoint review. Do NOT commit, merge or push yet.
 ```
+
+**After the checkpoint is all ✅, paste:**
+```
+Commit all changes on feat/m5-demo with message "feat(cli): demo, shadow comparison, POC readout [M5]", push the branch to origin,
+merge feat/m5-demo into main, push main to origin, then update docs/project-status.md
+(mark Prompt 15 done with today's date and any open issues), commit that as
+"docs(status): prompt 15 done [M5]" and push main.
+```
+
 
 ---
 
@@ -451,7 +785,7 @@ Acceptance: compare works on the sample (IoRS FAQs; PIB 2336151); demo runs end 
 ```
 Before I commit, review your own work against: (1) this prompt's acceptance criteria,
 (2) CLAUDE.md non-negotiable rules, (3) docs/architecture.md (layering, file locations, data model,
-API paths), (4) docs/ui-mockups for any UI work. Run `make test` and `make lint`.
+API paths), (4) docs/ui-mockups for any UI work. Run .\tasks.ps1 test and .\tasks.ps1 lint.
 Report as a checklist: ✅/❌ for each acceptance item, any deviation from the architecture and why,
 any doc you updated, and exact steps for me to verify manually. Do not start the next step.
 ```
