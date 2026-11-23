@@ -25,6 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+js = ["scrapy-playwright"]  # only for sources with requires_js
 dev = [
     "pytest",
     "pytest-cov",

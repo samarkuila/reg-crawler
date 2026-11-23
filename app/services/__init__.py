@@ -11,6 +11,7 @@ from app.services.email_render import EmailRenderService
 from app.services.health import HealthService
 from app.services.history import HistoryService
 from app.services.review import ReviewService
+from app.services.source_test import SourceTester
 from app.services.users import UserService
 
 
@@ -27,7 +28,7 @@ class Services:
     users: UserService
 
 
-def build_services(repo: Repository) -> Services:
+def build_services(repo: Repository, source_tester: SourceTester | None = None) -> Services:
     review = ReviewService(repo)
     return Services(
         repo=repo,
@@ -35,7 +36,7 @@ def build_services(repo: Repository) -> Services:
         cycle_export=CycleExportService(repo, review),
         health=HealthService(repo, review),
         history=HistoryService(repo),
-        config=ConfigService(repo),
+        config=ConfigService(repo, source_tester),
         audit=AuditService(repo),
         daily_update=DailyUpdateService(repo, EmailRenderService()),
         users=UserService(repo),

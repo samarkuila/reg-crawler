@@ -5,7 +5,7 @@ approve (CLAUDE.md rule 9). Unapproved versions are never used by crawls or by t
 """
 
 import re
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 
 from app.repositories.base import Repository
@@ -16,11 +16,10 @@ from app.schemas.api import (
     SourceChanges,
     SourceCreate,
     SourceTestResult,
-    SourceTestRow,
     SourceView,
 )
 from app.schemas.entities import AppUser, Setting, Source, SourceVersion, now_ist
-from app.schemas.enums import CheckStatus, SourceType, VersionStatus
+from app.schemas.enums import SourceType, VersionStatus
 from app.services import readable
 from app.services.errors import ConflictError, InvalidError, NotFoundError
 from app.services.permissions import (
@@ -29,6 +28,7 @@ from app.services.permissions import (
     require_different_person,
     require_role,
 )
+from app.services.source_test import MockSourceTester, SourceTester
 
 _HOW = {
     SourceType.RSS: "RSS feed + HTML listing",
@@ -69,8 +69,9 @@ def _clean_list(value: Any, what: str, *, minimum: int = 0) -> list[str]:
 
 
 class ConfigService:
-    def __init__(self, repo: Repository) -> None:
+    def __init__(self, repo: Repository, tester: SourceTester | None = None) -> None:
         self._repo = repo
+        self._tester: SourceTester = tester or MockSourceTester()
 
     def list_sme_functions(self) -> list[SmeFunctionOption]:
         """Active SME functions for the review form's dropdown (id + name only)."""
@@ -263,33 +264,18 @@ class ConfigService:
         )
 
     def test_source(self, user: AppUser, source_id: str) -> SourceTestResult:
-        """Mock dry run. The real one (Prompt 9+) fetches politely; it never saves items."""
+        """Dry run: read one page with the source's reading rules and return the parsed rows.
+
+        If a change is waiting for approval, the test uses the proposed rules, so they can be
+        checked before approving. Nothing is saved and no audit event is written.
+        """
         require_role(user, CONFIG_ROLES, "test a source")
         source = self._source(source_id)
-        if source.id == "egazette":
-            return SourceTestResult(
-                source_id=source.id,
-                status=CheckStatus.BLOCKED,
-                duration_seconds=1.4,
-                rows=[],
-                message="The site showed a verification page. The test stopped; nothing was saved.",
-            )
-        rows = [
-            SourceTestRow(
-                title=f"{source.authority} sample row {n}",
-                link=f"{source.url.rstrip('/')}/sample-{n}",
-                displayed_date=date(2026, 11, 20),
-                ref_no=None,
-            )
-            for n in (1, 2, 3)
-        ]
-        return SourceTestResult(
-            source_id=source.id,
-            status=CheckStatus.OK,
-            duration_seconds=1.2,
-            rows=rows,
-            message="Mock result for the POC build. Real parsing arrives with the crawler.",
-        )
+        pending = self._pending_version(source_id)
+        if pending is not None:
+            changes = {k: v for k, v in pending.after.items() if k in Source.model_fields}
+            source = Source.model_validate({**source.model_dump(), **changes})
+        return self._tester.run(source)
 
     # --- settings ----------------------------------------------------------------------------
 

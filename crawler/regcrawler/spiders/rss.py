@@ -61,7 +61,7 @@ class RssSpider(BaseRegSpider):
         description = _description(entry)
         return ListingItem(
             source_id=self.source.id,
-            run_id=self.run.id,
+            run_id=self.run_ref,
             channel=CHANNEL.value,
             title=entry.get("title") or "",
             url=link or "",

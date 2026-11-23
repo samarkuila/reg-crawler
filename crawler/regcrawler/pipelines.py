@@ -5,6 +5,7 @@ and parses: deciding what is new belongs to detection (CLAUDE.md rule 6, archite
 """
 
 import hashlib
+import json
 import logging
 import uuid
 from typing import Any
@@ -13,14 +14,15 @@ from scrapy.exceptions import DropItem
 
 from app.repositories.base import Repository
 from app.schemas.entities import RawListingItem, Snapshot, SourceCheck, now_ist
-from app.schemas.enums import CheckChannel, CheckStatus
+from app.schemas.enums import CheckChannel
 from app.services import normalise
 from regcrawler.items import ListingItem, SnapshotItem
 from regcrawler.repo import get_repository
-from regcrawler.state import CheckTracker
+from regcrawler.state import CheckTracker, outcome
 
 logger = logging.getLogger(__name__)
 ACTOR = "crawler"
+DRY_RUN_MAX_ROWS = 50
 
 
 def _id(prefix: str) -> str:
@@ -40,7 +42,14 @@ class SnapshotPipeline:
 
     def __init__(self, crawler: Any, repository: Repository | None = None) -> None:
         self.crawler = crawler
-        self.repo = repository or get_repository(crawler.settings)
+        self._repo = repository
+
+    @property
+    def repo(self) -> Repository:
+        # Looked up on first use, so a dry run (which never writes) never opens the database.
+        if self._repo is None:
+            self._repo = get_repository(self.crawler.settings)
+        return self._repo
 
     @classmethod
     def from_crawler(cls, crawler: Any) -> "SnapshotPipeline":
@@ -48,6 +57,10 @@ class SnapshotPipeline:
 
     def process_item(self, item: Any) -> Any:
         spider = self.crawler.spider
+        if getattr(spider, "dry_run", False):
+            if isinstance(item, SnapshotItem):
+                del item["body"]  # a dry run stores nothing
+            return item
         if isinstance(item, SnapshotItem):
             body: bytes = item["body"]
             digest = hashlib.sha256(body).hexdigest()
@@ -111,7 +124,7 @@ class NormalisePipeline:
         item["displayed_date"] = parsed
 
         ref_no = normalise.normalise_ref_no(item.get("ref_no")) or normalise.find_ref_no(
-            title, config.get("ref_no_regex")
+            title, config.get("ref_no_regex") or (config.get("selectors") or {}).get("ref_no_regex")
         )
         item["ref_no"] = ref_no
         item["raw_extra"] = extra
@@ -127,9 +140,16 @@ class DbPipeline:
 
     def __init__(self, crawler: Any, repository: Repository | None = None) -> None:
         self.crawler = crawler
-        self.repo = repository or get_repository(crawler.settings)
+        self._repo = repository
         self.rows: dict[CheckChannel, list[RawListingItem]] = {}
         self.skipped: dict[CheckChannel, int] = {}
+
+    @property
+    def repo(self) -> Repository:
+        # Looked up on first use, so a dry run (which never writes) never opens the database.
+        if self._repo is None:
+            self._repo = get_repository(self.crawler.settings)
+        return self._repo
 
     @classmethod
     def from_crawler(cls, crawler: Any) -> "DbPipeline":
@@ -139,6 +159,12 @@ class DbPipeline:
         if not isinstance(item, ListingItem):
             return item
         channel = _channel(item["channel"])
+        if getattr(self.crawler.spider, "dry_run", False):
+            if item.get("url"):
+                self.rows.setdefault(channel, []).append(item)  # type: ignore[arg-type]
+            else:
+                self.skipped[channel] = self.skipped.get(channel, 0) + 1
+            return item
         if not item.get("url"):
             self.skipped[channel] = self.skipped.get(channel, 0) + 1
             raise DropItem("Listing row without a URL cannot be identified; counted in the check")
@@ -162,6 +188,9 @@ class DbPipeline:
     def close_spider(self) -> None:
         spider = self.crawler.spider
         tracker: CheckTracker = spider.check
+        if getattr(spider, "dry_run", False):
+            self._write_dry_run(spider, tracker)
+            return
         for channel in {*tracker.expected, *tracker.channels, *self.rows}:
             rows = self.rows.get(channel, [])
             if rows:
@@ -169,34 +198,40 @@ class DbPipeline:
             self.repo.record_source_check(self._check(spider, tracker, channel, len(rows)), ACTOR)
 
     def _check(self, spider: Any, tracker: CheckTracker, channel: CheckChannel, found: int):  # type: ignore[no-untyped-def]
-        state = tracker.state(channel)
-        skipped = self.skipped.get(channel, 0)
-        status, detail, count = state.status, state.error_detail, found
-        if status is None:
-            if tracker.blocked and not state.attempted:
-                status, detail = CheckStatus.BLOCKED, "Not fetched: the source was blocked earlier"
-            elif not state.attempted:
-                status, detail = (
-                    CheckStatus.FAILED,
-                    "No page was fetched (robots.txt disallowed it, or the site did not answer)",
-                )
-            elif found == 0 and not state.empty_is_ok:
-                status = CheckStatus.ZERO_ITEMS
-            else:
-                status = CheckStatus.OK
-        if status in (CheckStatus.BLOCKED, CheckStatus.FAILED) and found == 0:
-            count = None  # nothing was read, so "0 found" would be misleading
-        if skipped:
-            note = f"{skipped} row(s) without a URL were skipped"
-            detail = f"{detail}; {note}" if detail else note
+        result = outcome(tracker, channel, found, self.skipped.get(channel, 0))
         return SourceCheck(
             id=f"chk-{spider.run.id}-{spider.source.id}-{channel.value.lower()}",
             run_id=spider.run.id,
             source_id=spider.source.id,
             channel=channel,
-            status=status,
-            http_status=state.http_status,
-            items_found=count,
-            error_detail=detail,
-            snapshot_id=state.snapshot_id,
+            status=result.status,
+            http_status=result.http_status,
+            items_found=result.count,
+            error_detail=result.detail,
+            snapshot_id=tracker.state(channel).snapshot_id,
         )
+
+    def _write_dry_run(self, spider: Any, tracker: CheckTracker) -> None:
+        """Dry run: no database, no stored files. Parsed rows go to the file named by -a out=."""
+        channel = spider.channels[0]
+        rows = self.rows.get(channel, [])
+        result = outcome(tracker, channel, len(rows), self.skipped.get(channel, 0))
+        payload = {
+            "status": result.status.value,
+            "http_status": result.http_status,
+            "detail": result.detail,
+            "rows_found": len(rows),
+            "rows": [
+                {
+                    "title": r["title"],
+                    "link": r["url"],
+                    "displayed_date": r["displayed_date"].isoformat()
+                    if r.get("displayed_date")
+                    else None,
+                    "ref_no": r.get("ref_no"),
+                }
+                for r in rows[:DRY_RUN_MAX_ROWS]
+            ],
+        }
+        if spider.out is not None:
+            spider.out.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
