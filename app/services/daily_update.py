@@ -34,6 +34,13 @@ SYSTEM_ACTOR = "system"
 _APPLICABILITY = {"YES": "Yes", "NO": "No", "TBC": "TBC"}
 
 
+def _date_note(d: ReviewDecision) -> str | None:
+    """FR-33: name both dates only when the issue date differs from the website publish date."""
+    if d.issue_date and d.publish_date and d.issue_date != d.publish_date:
+        return f"Date: {fmt_date(d.issue_date)} · Published on website: {fmt_date(d.publish_date)}"
+    return None
+
+
 @dataclass
 class ExportFile:
     content: bytes
@@ -125,6 +132,7 @@ class DailyUpdateService:
             item_id=item.id,
             decision_id=d.id,
             ref_no_and_date=d.ref_no_and_date or item.title,
+            date_note=_date_note(d),
             authority=d.authority or "",
             guideline_title=d.guideline_title or item.title,
             link=item.canonical_url,

@@ -8,11 +8,11 @@
 <p style="margin:0 0 14px 0;">{{ no_update_text }}</p>
 {%- else %}
 <p style="margin:0 0 14px 0;">{{ intro }}</p>
-<table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;">
+<table role="table" width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;mso-table-lspace:0pt;mso-table-rspace:0pt;">
 <thead>
 <tr>
 {%- for head in ["S.No", "Reference No. and Date", "Authority", "Guidelines", "Applicability", "Effective Date", "Status", "Impact on TVSCS"] %}
-<th style="background:#114984;color:#FFFFFF;font-weight:600;font-size:13px;padding:8px;border:1px solid #9FB3CC;text-align:left;vertical-align:bottom;">{{ head }}</th>
+<th bgcolor="#114984" style="background:#114984;color:#FFFFFF;font-weight:600;font-size:13px;padding:8px;border:1px solid #9FB3CC;text-align:left;vertical-align:bottom;">{{ head }}</th>
 {%- endfor %}
 </tr>
 </thead>
@@ -20,7 +20,7 @@
 {%- for row in rows %}
 <tr>
 <td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.serial_no }}</td>
-<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.ref_no_and_date }}</td>
+<td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.ref_no_and_date }}{% if row.date_note %}<br><strong>{{ row.date_note }}</strong>{% endif %}</td>
 <td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.authority }}</td>
 <td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.guideline_title }}<br><a href="{{ row.link }}">{{ row.link_text }}</a></td>
 <td style="border:1px solid #C9D3E0;padding:8px;font-size:13px;vertical-align:top;">{{ row.applicability }}</td>

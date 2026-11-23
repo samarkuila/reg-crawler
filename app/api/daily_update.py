@@ -23,6 +23,23 @@ def preview(
     return services.daily_update.preview(user, cycle)
 
 
+@router.get(
+    "/daily-update/cycle-export.csv",
+    summary="Every captured item of the cycle (incl. low relevance and dismissed) for Excel",
+)
+def export_cycle(
+    cycle: str | None = Query(None, description="Cycle id, e.g. 2026-11-20-EOD (default: latest)"),
+    user: AppUser = Depends(current_user),
+    services: Services = Depends(get_services),
+) -> Response:
+    content, filename = services.cycle_export.export_csv(user, cycle)
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post(
     "/daily-update/{update_id}/reorder", response_model=DailyUpdatePreview, summary="Set S.No order"
 )
