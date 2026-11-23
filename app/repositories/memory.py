@@ -111,6 +111,16 @@ class MemoryRepository:
     def _all(self, collection: str) -> list[Any]:
         return [o.model_copy(deep=True) for o in self._s[collection].values()]
 
+    def load_blob(self, sha256: str, content: bytes) -> None:
+        """Seed loader for stored copies (content-addressed by SHA-256)."""
+        with self._lock:
+            self._blobs[sha256] = content
+
+    def read_blob(self, sha256: str) -> bytes | None:
+        """Stored copy of a snapshot or document, or None when the file is not held."""
+        with self._lock:
+            return self._blobs.get(sha256)
+
     def load(self, entities: Iterable[BaseModel]) -> None:
         """Seed loader: puts entities in without audit events (seed data is not a user action)."""
         with self._lock:
@@ -360,6 +370,9 @@ class MemoryRepository:
 
     def list_documents(self, item_id: str) -> list[Document]:
         return [d for d in self._all("documents") if d.item_id == item_id]
+
+    def get_document(self, document_id: str) -> Document | None:
+        return self._get("documents", document_id)
 
     def add_document(
         self, doc: Document, content: bytes | None, new_state: ItemState | None, actor: str

@@ -369,3 +369,124 @@ class SettingRejectIn(Model):
 class SettingView(Model):
     setting: Setting
     has_pending: bool
+
+
+# --- Source health grid ----------------------------------------------------------------------
+
+CellTone = Literal["ok", "grey", "mod", "urg"]
+
+
+class GridAction(Model):
+    """A link or button in the Action column. `kind` tells the page which call to make."""
+
+    kind: Literal["snapshot", "compare", "log", "manual"]
+    label: str
+    snapshot_id: str | None = None
+    check_id: str | None = None
+
+
+class GridCell(Model):
+    cycle: str
+    check_id: str | None
+    label: str  # e.g. "OK", "Zero items", "1 mismatch", "Blocked", "Failed (timeout)"
+    tone: CellTone
+    status: CheckStatus | None
+
+
+class GridRow(Model):
+    source_id: str
+    authority: str
+    page_name: str
+    channel: str
+    cells: list[GridCell]
+    items_latest: str  # "10", "1 change" or "—"
+    needs_attention: bool
+    actions: list[GridAction]
+
+
+class SourceGrid(Model):
+    cycles: list[CycleRef]
+    cycle_labels: list[str]
+    rows: list[GridRow]
+    current_run: CrawlRun | None
+
+
+class CompareItem(Model):
+    title: str
+    ref_no: str | None
+    displayed_date: date | None
+    seen_in: Literal["Both", "RSS only", "HTML only"]
+
+
+class CompareResult(Model):
+    source_id: str
+    cycle: str
+    authority: str
+    page_name: str
+    both: int
+    rss_only: int
+    html_only: int
+    items: list[CompareItem]
+    message: str
+
+
+class CheckLog(Model):
+    check: SourceCheckView
+    cycle_label: str
+    run_started_at: datetime | None
+    run_ended_at: datetime | None
+    lines: list[str]
+
+
+# --- Item history ----------------------------------------------------------------------------
+
+
+class HistoryHit(Model):
+    id: str
+    title: str
+    authority: str
+    internal_ref: str
+    note: str  # "Modified 20.11.2026" or "First seen 03.11.2026"
+
+
+class HistoryResults(Model):
+    total: int
+    hits: list[HistoryHit]
+    authorities: list[str]
+
+
+class TrailHash(Model):
+    label: str
+    sha256: str
+    short: str
+
+
+class TrailLink(Model):
+    label: str
+    href: str
+
+
+class TrailBadge(Model):
+    tone: Literal["ok", "grey", "mod", "new", "urg"]
+    label: str
+
+
+class TrailStep(Model):
+    number: int
+    kind: Literal["email", "decision", "document", "change", "snapshot", "source_config"]
+    title: str
+    badge: TrailBadge | None = None
+    text: str
+    note: str | None = None
+    hashes: list[TrailHash] = Field(default_factory=list)
+    links: list[TrailLink] = Field(default_factory=list)
+    present: bool = True  # False when this stage has not happened yet for the item
+    at: datetime | None = None
+    who: str | None = None
+
+
+class Trail(Model):
+    item_id: str
+    internal_ref: str
+    title: str
+    steps: list[TrailStep]

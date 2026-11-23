@@ -59,6 +59,24 @@ def sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def snapshot_bytes(snap_id: str, url: str) -> bytes:
+    """Stored copy of a listing snapshot in the demo data (clearly marked as sample text)."""
+    lines = [
+        "SAMPLE SNAPSHOT (demo data, not real regulator text)",
+        f"Source page: {url}",
+        f"Snapshot: {snap_id}",
+        "",
+    ]
+    return "\n".join(lines).encode()
+
+
+IORS_DOCUMENT = (
+    b"<html><body><h1>Inter-operable Regulatory Sandbox (IoRS) - FAQs</h1>"
+    b"<p>SAMPLE DOCUMENT (demo data, not real regulator text).</p></body></html>"
+)
+IORS_DOCUMENT_SHA = hashlib.sha256(IORS_DOCUMENT).hexdigest()
+
+
 def fingerprint(source_id: str, ref_no: str | None, canonical_url: str) -> str:
     return sha(f"{source_id}|{ref_no or canonical_url}")
 
@@ -333,12 +351,12 @@ def checks_and_snapshots() -> tuple[list[SourceCheck], list[Snapshot]]:
             snap_id: str | None = None
             if status in (CheckStatus.OK, CheckStatus.ZERO_ITEMS):
                 snap_id = f"snap-{key}-{source_id}-{channel.value.lower()}"
-                digest = sha(snap_id)
                 url = (
                     _SOURCE_RSS[source_id]
                     if channel == CheckChannel.RSS
                     else _SOURCE_URL[source_id]
                 ) or ""
+                digest = hashlib.sha256(snapshot_bytes(snap_id, url)).hexdigest()
                 snaps.append(
                     Snapshot(
                         id=snap_id,
@@ -572,7 +590,7 @@ def observations() -> list[ItemObservation]:
             key, CheckChannel.HTML if it.channel != Channel.RSS else CheckChannel.RSS
         )
         change = _ITEM_CHANGE.get(key, ChangeType.NEW)
-        cur = sha(f"content-{key}-latest")
+        cur = IORS_DOCUMENT_SHA if key == "iors-faqs" else sha(f"content-{key}-latest")
         snap = None
         if it.source_id in _CHECKED_CHANNELS:
             snap = f"snap-2026-11-20-eod-{it.source_id}-{channel.value.lower()}"
@@ -605,7 +623,7 @@ def observations() -> list[ItemObservation]:
 
 
 def documents() -> list[Document]:
-    iors_sha = sha("iors-faq-document")
+    iors_sha = IORS_DOCUMENT_SHA
     return [
         Document(
             id="doc-iors-faqs",
@@ -883,6 +901,9 @@ def load_seed(repo: MemoryRepository) -> MemoryRepository:
     repo.load(runs())
     repo.load(checks)
     repo.load(snaps)
+    for snap in snaps:
+        repo.load_blob(snap.sha256, snapshot_bytes(snap.id, snap.url))
+    repo.load_blob(IORS_DOCUMENT_SHA, IORS_DOCUMENT)
     repo.load(items())
     repo.load(observations())
     repo.load(documents())
