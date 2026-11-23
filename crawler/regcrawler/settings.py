@@ -11,6 +11,7 @@ Profiles: REGCRAWLER_PROFILE=dev turns the HTTP cache on for local development (
 real sites while building selectors). Production runs never use it.
 """
 
+import importlib.util
 import os
 import sys
 
@@ -67,6 +68,22 @@ ITEM_PIPELINES = {
     "regcrawler.pipelines.NormalisePipeline": 200,
     "regcrawler.pipelines.DbPipeline": 300,
 }
+
+# --- Browser rendering: only for sources marked requires_js, and only if installed --------------
+# scrapy-playwright is an optional extra (pip install -e .[js]; playwright install chromium) and is
+# switched on with REGCRAWLER_PLAYWRIGHT=1. A plain headless render: no stealth plugins, no
+# fingerprint or header tricks (rule 1).
+PLAYWRIGHT_ENABLED = (
+    os.environ.get("REGCRAWLER_PLAYWRIGHT") == "1"
+    and importlib.util.find_spec("scrapy_playwright") is not None
+)
+if PLAYWRIGHT_ENABLED:
+    DOWNLOAD_HANDLERS = {
+        "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+        "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+    }
+    PLAYWRIGHT_BROWSER_TYPE = "chromium"
+    PLAYWRIGHT_LAUNCH_OPTIONS = {"headless": True}
 
 # --- Cache (dev profile only) ------------------------------------------------------------------
 HTTPCACHE_ENABLED = PROFILE == "dev"

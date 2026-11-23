@@ -68,7 +68,7 @@ class UnscXmlSpider(BaseRegSpider):
         kind = "individual" if change.kind == "individual" else "entity"
         return ListingItem(
             source_id=self.source.id,
-            run_id=self.run.id,
+            run_id=self.run_ref,
             channel=CHANNEL.value,
             title=f"UNSC sanctions list {change.change.value.lower()}: {change.name} "
             f"({change.ref}) - {change.summary}",

@@ -23,6 +23,7 @@ def fresh_repo(request, monkeypatch: pytest.MonkeyPatch, tmp_path, sql_template)
         monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(folder / 'reg_monitor.db').as_posix()}")
         monkeypatch.setenv("FILES_ROOT", str(folder / "files"))
     monkeypatch.setenv("REPO_BACKEND", request.param)
+    monkeypatch.setenv("SOURCE_TESTER", "mock")  # API tests never start a crawl or use the network
     reset_services()
     yield request.param
     get_services().repo = None  # drop the connection to the temporary database
