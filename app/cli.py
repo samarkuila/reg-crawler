@@ -3,6 +3,7 @@
     python -m app.cli import-sources config/sources.yaml --actor "Samarendra K."
     python -m app.cli import-monitoring-excel monitoring.xlsx --actor "Samarendra K."
     python -m app.cli seed-demo [--reset]
+    python -m app.cli detect --run <run id> [--documents]
     python -m app.cli new-run --actor "Samarendra K." [--cycle ADHOC]
 
 These always use the SQL database (DATABASE_URL, default data/reg_monitor.db). Imports only
@@ -47,6 +48,30 @@ def cmd_new_run(args: argparse.Namespace) -> int:
 
     run = _repository().create_run(Cycle(args.cycle), now_ist().date(), args.actor, args.actor)
     print(run.id)
+    return 0
+
+
+def cmd_detect(args: argparse.Namespace) -> int:
+    """Turn the rows a crawl stored into items (and, with --documents, fetch their documents)."""
+    from app.services.detection import DetectionService
+    from app.services.documents import DocumentService, SubprocessDocumentFetcher
+
+    repo = _repository()
+    if repo.get_run(args.run) is None:
+        raise ImportError_(f"Unknown run {args.run!r}. Create one with: new-run --actor <name>")
+    result = DetectionService(repo).process(args.run)
+    counts = {c: result.count(c) for c in ("NEW", "MODIFIED", "BACKDATED", "REAPPEARED")}
+    print(f"Items: {counts} unchanged: {result.unchanged}")
+    for warning in result.warnings:
+        print(f"Warning ({warning.kind}): {warning.detail}")
+    if args.documents:
+        report = DocumentService(repo, SubprocessDocumentFetcher()).process(result.events)
+        print(
+            f"Documents: stored {report.stored}, blocked {report.blocked}, "
+            f"failed {report.failed}, needs OCR {report.needs_ocr}, skipped {report.skipped}"
+        )
+        for note in report.notes:
+            print(f"  - {note}")
     return 0
 
 
@@ -109,6 +134,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", required=True, help="Your name as shown in the app")
     p.add_argument("--cycle", default="ADHOC", choices=["MORNING", "EOD", "ADHOC", "URGENT"])
     p.set_defaults(func=cmd_new_run)
+
+    p = sub.add_parser("detect", help="Detect items from a crawl run's stored rows")
+    p.add_argument("--run", required=True, help="Crawl run id (see new-run)")
+    p.add_argument("--documents", action="store_true", help="Also fetch and store documents")
+    p.set_defaults(func=cmd_detect)
 
     p = sub.add_parser("seed-demo", help="Load the mockup demo data into an empty database")
     p.add_argument("--reset", action="store_true", help="Delete the SQLite file first")

@@ -118,3 +118,48 @@ def find_ref_no(text: str | None, extra_pattern: str | None = None) -> str | Non
         if found:
             return normalise_ref_no(found.group(1) if found.groups() else found.group(0))
     return None
+
+
+# --- HTML to plain text ---------------------------------------------------------------------------
+
+from html.parser import HTMLParser  # noqa: E402
+
+_SKIP_TAGS = {"script", "style", "noscript", "template", "head"}
+_BREAK_TAGS = {
+    "p", "div", "br", "li", "tr", "table", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6",
+    "section", "article", "blockquote", "pre",
+}  # fmt: skip
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._skip = 0
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[no-untyped-def]
+        if tag in _SKIP_TAGS:
+            self._skip += 1
+        elif tag in _BREAK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _SKIP_TAGS:
+            self._skip = max(0, self._skip - 1)
+        elif tag in _BREAK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip:
+            self.parts.append(data)
+
+
+def html_to_text(markup: str | None) -> str:
+    """Readable text of an HTML fragment or page: no tags, scripts or styles; lines kept."""
+    if not markup:
+        return ""
+    parser = _TextExtractor()
+    parser.feed(markup)
+    parser.close()
+    lines = (re.sub(r"[ \t\xa0]+", " ", ln).strip() for ln in "".join(parser.parts).splitlines())
+    return "\n".join(ln for ln in lines if ln)

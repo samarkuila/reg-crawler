@@ -37,6 +37,8 @@ MUTATING = {
     "record_source_check",
     "record_snapshot",
     "add_raw_items",
+    "save_detection",
+    "mark_items_seen",
     "add_manual_check",
     "add_document",
     "save_decisions",

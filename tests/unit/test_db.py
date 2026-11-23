@@ -78,7 +78,7 @@ M1_ADDITIONS = {
     "source": {"planned", "position"},
     "source_version": {"decided_at", "reject_reason"},
     "regulatory_item": {"summary"},
-    "document": {"filename"},
+    "document": {"filename", "needs_ocr"},
     "review_decision": {"is_draft"},
     "daily_update": {"prepared_by", "exported_at"},
 }
