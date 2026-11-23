@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+
+{#- Page shell only. Same filter-form and table patterns as Item history. audit.js loads from /api/v1. -#}
+{% block content %}
+<div class="row row-between row-end gap-3">
+  <div>
+    <h1 class="page-title">Audit log</h1>
+    <p class="page-sub muted">Who did what, and when. Read only.</p>
+  </div>
+  <a class="btn btn-o" id="au-export" href="/api/v1/audit/export.csv">Export CSV</a>
+</div>
+
+<form class="card pad-sm row row-end gap-3" role="search" id="au-form" novalidate>
+  <div class="field au-field"><label for="a-actor">Who</label><select id="a-actor"><option value="">Anyone</option></select></div>
+  <div class="field au-field"><label for="a-entity">What was changed</label><select id="a-entity"><option value="">Anything</option></select></div>
+  <div class="field au-field"><label for="a-action">Action</label><select id="a-action"><option value="">Any action</option></select></div>
+  <div class="field au-date"><label for="a-from">From</label><input id="a-from" placeholder="DD.MM.YYYY" inputmode="numeric" aria-describedby="a-from-err"><div class="field-error" id="a-from-err" role="alert" hidden></div></div>
+  <div class="field au-date"><label for="a-to">To</label><input id="a-to" placeholder="DD.MM.YYYY" inputmode="numeric" aria-describedby="a-to-err"><div class="field-error" id="a-to-err" role="alert" hidden></div></div>
+  <button type="submit" class="btn btn-p">Filter</button>
+  <button type="button" class="btn btn-o" id="au-clear">Clear</button>
+</form>
+
+<section class="card" aria-label="Audit events">
+  <div class="card-head">
+    <h2 class="section-title">Events</h2>
+    <span class="muted text-13" id="au-count" aria-live="polite"></span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th scope="col">When</th><th scope="col">Who</th><th scope="col">Action</th>
+        <th scope="col">What</th><th scope="col">Details</th>
+      </tr></thead>
+      <tbody id="au-rows"></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/audit.js"></script>
+{% endblock %}

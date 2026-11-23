@@ -256,3 +256,31 @@ tr.row-alert{background:var(--c-danger-bg)}
 .step-body{padding-bottom:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
 .step-pending .step-body{color:var(--c-grey-600)}
 .btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
+
+/* ---------- Admin pages: sources, settings, audit ---------- */
+.card-pending{border-color:var(--c-warn-line,#F2D58A)}
+.diff-grid{display:grid;grid-template-columns:minmax(120px,max-content) minmax(0,1fr) minmax(0,1fr);gap:var(--sp-2) var(--sp-3);align-items:start}
+.diff-head{font-size:var(--fs-13);color:var(--c-grey-600)}
+.diff-label{font-size:var(--fs-14);font-weight:var(--fw-medium)}
+.diff-before,.diff-after{font-size:var(--fs-14);border:1px solid var(--c-border);border-radius:var(--radius-control);padding:var(--sp-2) var(--sp-3);overflow-wrap:anywhere}
+.diff-before{background:var(--c-bg)}
+.diff-after{background:#F2FAF5;border-color:#BFE3CD}
+.diff-wide{grid-column:1/-1}
+.tabs{display:flex;flex-wrap:wrap;gap:var(--sp-1);padding:var(--sp-2) var(--sp-3) 0;border-bottom:1px solid var(--c-border)}
+.tab{min-height:var(--touch-min);padding:0 var(--sp-4);background:none;border:0;border-bottom:3px solid transparent;font:var(--fw-medium) var(--fs-14) var(--font-sans);
+  color:var(--c-grey-700);cursor:pointer;display:inline-flex;align-items:center;gap:var(--sp-2)}
+.tab:hover{color:var(--c-blue)}
+.tab.is-on{color:var(--c-blue);border-bottom-color:var(--c-green-strong)}
+.tab:focus-visible{outline:2px solid var(--c-focus);outline-offset:-2px}
+.se-narrow{max-width:220px}
+td input[type=text],td input:not([type]),td input[type=email],td select{min-width:140px}
+.au-field{flex:1 1 160px}
+.au-date{flex:1 1 140px}
+.au-when{white-space:nowrap}
+.au-details summary{cursor:pointer;color:var(--c-blue);font-size:var(--fs-14);min-height:var(--touch-min);display:flex;align-items:center}
+.au-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-3);padding-bottom:var(--sp-3)}
+.au-kv{border:1px solid var(--c-border);border-radius:var(--radius-control);padding:var(--sp-2h) var(--sp-3);background:var(--c-bg)}
+.au-kv-title{font-size:var(--fs-13);color:var(--c-grey-600);margin-bottom:var(--sp-1h)}
+.au-kv dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:var(--sp-1) var(--sp-3);font-size:var(--fs-13)}
+.au-kv dt{color:var(--c-grey-600)}
+.au-kv dd{margin:0;overflow-wrap:anywhere}

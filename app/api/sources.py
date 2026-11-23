@@ -17,8 +17,10 @@ router = APIRouter(tags=["sources"])
 
 
 @router.get("/sources", response_model=list[SourceView], summary="Source register")
-def list_sources(services: Services = Depends(get_services)) -> list[SourceView]:
-    return services.config.list_sources()
+def list_sources(
+    user: AppUser = Depends(current_user), services: Services = Depends(get_services)
+) -> list[SourceView]:
+    return services.config.list_sources(user)
 
 
 @router.post(

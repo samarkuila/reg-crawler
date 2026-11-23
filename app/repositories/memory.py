@@ -509,15 +509,19 @@ class MemoryRepository:
 
     # --- configuration -----------------------------------------------------------------------
 
+    # SME routing, recipients and the email wording are versioned settings (maker-checker like
+    # every other setting). These three methods are read-only views of the approved values.
     def list_sme_functions(self) -> list[SmeFunction]:
-        return self._all("sme_functions")
+        s = self._settings["sme-routing"]
+        return [SmeFunction(**item, version=s.version) for item in copy.deepcopy(s.value)]
 
     def list_recipients(self) -> list[Recipient]:
-        return self._all("recipients")
+        s = self._settings["recipients"]
+        return [Recipient(**item, version=s.version) for item in copy.deepcopy(s.value)]
 
     def get_email_template(self) -> EmailTemplate:
-        templates = self._all("email_templates")
-        return max(templates, key=lambda t: t.version)
+        s = self._settings["email-template"]
+        return EmailTemplate(id="tpl-daily-update", version=s.version, **copy.deepcopy(s.value))
 
     def list_settings(self) -> list[Setting]:
         return sorted(

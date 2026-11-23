@@ -250,3 +250,20 @@ export async function askText({ title, intro, label, confirmLabel, danger = fals
     error = "This is required.";
   }
 }
+
+/** Before/after table for a pending change: [{label, before, after}] -> HTML (values are escaped). */
+export function diffGridHtml(changes, beforeLabel = "Before", afterLabel = "After") {
+  const body = changes.length
+    ? changes
+        .map(
+          (c) =>
+            `<div class="diff-label">${escapeHtml(c.label)}</div>` +
+            `<div class="diff-before">${escapeHtml(c.before)}</div><div class="diff-after">${escapeHtml(c.after)}</div>`,
+        )
+        .join("")
+    : '<div class="muted text-14 diff-wide">No readable difference.</div>';
+  return (
+    '<div class="diff-grid"><div class="diff-head"></div>' +
+    `<div class="diff-head">${escapeHtml(beforeLabel)}</div><div class="diff-head">${escapeHtml(afterLabel)}</div>${body}</div>`
+  );
+}
