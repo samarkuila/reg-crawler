@@ -1,4 +1,29 @@
-# Placeholder — populated in later prompts. Config is data; do not hard-code in code.
+# Placeholder - populated in later prompts. Config is data; do not hard-code in code.
 crawler:
   contact: "compliance-automation@example.invalid"   # replace with the real contact before any live crawl
+  # Block detection (CLAUDE.md rule 1): we only RECORD a block and stop; we never work around it.
+  # Matched case-insensitively against the first 64 KB of an HTML/text response.
+  block_markers:
+    - "captcha"
+    - "g-recaptcha"
+    - "h-captcha"
+    - "cf-challenge"
+    - "just a moment..."
+    - "checking your browser"
+    - "attention required"
+    - "access denied"
+    - "request unsuccessful"
+    - "are you a robot"
+    - "unusual traffic"
+    - "verify you are human"
+    - "bot detection"
+  # A final URL (after redirects) containing one of these means we were sent to a login page.
+  login_url_markers:
+    - "/login"
+    - "/signin"
+    - "/sign-in"
+    - "/sso/"
+    - "/auth/"
+    - "/account/login"
+  block_status_codes: [403, 429]
 users: []

@@ -6,6 +6,7 @@ callers cannot change stored state, and snapshots/documents/audit events have no
 """
 
 import copy
+import hashlib
 import threading
 import uuid
 from collections.abc import Iterable, Iterator
@@ -26,6 +27,7 @@ from app.schemas.entities import (
     EmailTemplate,
     ItemObservation,
     ManualCheck,
+    RawListingItem,
     Recipient,
     RegulatoryItem,
     ReviewDecision,
@@ -47,6 +49,7 @@ _COLLECTIONS: dict[type[BaseModel], str] = {
     CrawlRun: "runs",
     SourceCheck: "checks",
     Snapshot: "snapshots",
+    RawListingItem: "raw_items",
     RegulatoryItem: "items",
     ItemObservation: "observations",
     Document: "documents",
@@ -332,6 +335,40 @@ class MemoryRepository:
 
     def get_snapshot(self, snapshot_id: str) -> Snapshot | None:
         return self._get("snapshots", snapshot_id)
+
+    def record_snapshot(self, snapshot: Snapshot, content: bytes, actor: str) -> Snapshot:
+        if hashlib.sha256(content).hexdigest() != snapshot.sha256:
+            raise ValueError("Snapshot sha256 does not match the content")
+        with self._txn():
+            if snapshot.id in self._s["snapshots"]:
+                raise ValueError(f"Snapshot {snapshot.id} already exists")
+            self._s["snapshots"][snapshot.id] = snapshot.model_copy(deep=True)
+            self._blobs.setdefault(snapshot.sha256, content)  # write-once
+            self._audit(actor, "snapshot.recorded", "snapshot", snapshot.id, None, _dump(snapshot))
+            return snapshot.model_copy(deep=True)
+
+    def add_raw_items(self, items: list[RawListingItem], actor: str) -> list[RawListingItem]:
+        if not items:
+            return []
+        with self._txn():
+            for item in items:
+                self._s["raw_items"][item.id] = item.model_copy(deep=True)
+            first = items[0]
+            self._audit(
+                actor,
+                "raw_listing_items.recorded",
+                "crawl_run",
+                first.run_id,
+                None,
+                {"source_id": first.source_id, "channel": first.channel.value, "count": len(items)},
+            )
+            return [i.model_copy(deep=True) for i in items]
+
+    def list_raw_items(self, run_id: str, source_id: str | None = None) -> list[RawListingItem]:
+        rows = [r for r in self._all("raw_items") if r.run_id == run_id]
+        if source_id is not None:
+            rows = [r for r in rows if r.source_id == source_id]
+        return sorted(rows, key=lambda r: (r.fetched_at, r.id))
 
     # --- items, evidence, decisions ----------------------------------------------------------
 

@@ -14,6 +14,7 @@ table, written once and never overwritten.
 """
 
 import copy
+import hashlib
 import os
 import re
 import uuid
@@ -41,6 +42,7 @@ from app.schemas.entities import (
     EmailTemplate,
     ItemObservation,
     ManualCheck,
+    RawListingItem,
     Recipient,
     RegulatoryItem,
     ReviewDecision,
@@ -62,6 +64,7 @@ _ENTITY_TO_MODEL: dict[type[BaseModel], type[m.Base]] = {
     CrawlRun: m.CrawlRun,
     SourceCheck: m.SourceCheck,
     Snapshot: m.Snapshot,
+    RawListingItem: m.RawListingItem,
     RegulatoryItem: m.RegulatoryItem,
     ItemObservation: m.ItemObservation,
     Document: m.Document,
@@ -502,6 +505,44 @@ class SqlRepository:
         with self._tx() as session:
             row = session.get(m.Snapshot, snapshot_id)
             return None if row is None else _to_entity(Snapshot, row)
+
+    def record_snapshot(self, snapshot: Snapshot, content: bytes, actor: str) -> Snapshot:
+        if hashlib.sha256(content).hexdigest() != snapshot.sha256:
+            raise ValueError("Snapshot sha256 does not match the content")
+        with self._tx() as session:
+            session.add(_to_row(m.Snapshot, snapshot))
+            self._audit(
+                session, actor, "snapshot.recorded", "snapshot", snapshot.id, None, _dump(snapshot)
+            )
+            session.flush()
+            self._write_once(snapshot.path, content)  # a failed write rolls the row back
+            return snapshot.model_copy(deep=True)
+
+    def add_raw_items(self, items: list[RawListingItem], actor: str) -> list[RawListingItem]:
+        if not items:
+            return []
+        with self._tx() as session:
+            for item in items:
+                session.add(_to_row(m.RawListingItem, item))
+            first = items[0]
+            self._audit(
+                session,
+                actor,
+                "raw_listing_items.recorded",
+                "crawl_run",
+                first.run_id,
+                None,
+                {"source_id": first.source_id, "channel": first.channel.value, "count": len(items)},
+            )
+            return [i.model_copy(deep=True) for i in items]
+
+    def list_raw_items(self, run_id: str, source_id: str | None = None) -> list[RawListingItem]:
+        with self._tx() as session:
+            stmt = select(m.RawListingItem).where(m.RawListingItem.run_id == run_id)
+            if source_id is not None:
+                stmt = stmt.where(m.RawListingItem.source_id == source_id)
+            rows = session.scalars(stmt.order_by(m.RawListingItem.fetched_at, m.RawListingItem.id))
+            return [_to_entity(RawListingItem, r) for r in rows]
 
     # --- items, evidence, decisions ----------------------------------------------------------
 

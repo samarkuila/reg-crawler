@@ -24,6 +24,9 @@ erDiagram
   CRAWL_RUN ||--o{ ITEM_OBSERVATION : run_id
   SNAPSHOT |o--o{ ITEM_OBSERVATION : snapshot_id
   SOURCE_CHECK ||--o| MANUAL_CHECK : source_check_id
+  CRAWL_RUN ||--o{ RAW_LISTING_ITEM : run_id
+  SOURCE ||--o{ RAW_LISTING_ITEM : source_id
+  SNAPSHOT |o--o{ RAW_LISTING_ITEM : snapshot_id
   SOURCE ||--o{ REGULATORY_ITEM : source_id
   CRAWL_RUN ||--o{ REGULATORY_ITEM : first_seen_run_id
   REGULATORY_ITEM ||--o{ REVIEW_DECISION : item_id
@@ -122,6 +125,19 @@ erDiagram
     string user
     text note
     datetime ts
+  }
+  RAW_LISTING_ITEM {
+    string id PK
+    string run_id FK
+    string source_id FK
+    enum channel
+    string snapshot_id FK
+    text title
+    text url
+    string ref_no
+    date displayed_date
+    json raw_extra
+    datetime fetched_at
   }
   RECIPIENT {
     string id PK
@@ -310,6 +326,11 @@ Every table and column in §4 exists. These differences are deliberate:
    `after` (empty for creations).
 6. **Plain-text columns for names that point at configuration** (`review_decision.sme_function`)
    have no foreign key, because the function list lives in `setting` (point 3).
-7. **Relationship objects are not defined on the models.** Foreign keys and indexes are in place;
+7. **New table `raw_listing_item`** (Prompt 9, migration `0003`): the rows a spider read from a feed,
+   listing or data file (`run_id`, `source_id`, `channel`, `snapshot_id`, `title`, canonical `url`,
+   `ref_no`, `displayed_date`, `raw_extra`, `fetched_at`). Architecture §3.1 says the pipelines write
+   "raw ListingItems", but §4 had no table for them. They are not regulatory items: Detection
+   (Prompt 12) reads them and decides what is new. Rows are only inserted by the crawler.
+8. **Relationship objects are not defined on the models.** Foreign keys and indexes are in place;
    the SQL repository queries them directly. Adding ORM relationships later does not change the
    schema.

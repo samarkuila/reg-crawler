@@ -90,7 +90,7 @@ CONFIG_TABLES = {
     "sender_name version",
     "setting": "key value version description updated_by updated_at pending",
 }
-EXTRA_TABLES = {"internal_ref_counter"}
+EXTRA_TABLES = {"internal_ref_counter", "raw_listing_item"}  # raw_listing_item: Prompt 9
 
 
 def columns(engine: Engine, table: str) -> set[str]:

@@ -1,89 +1,85 @@
-# Scrapy settings for regcrawler project
-#
-# For simplicity, this file contains only settings considered important or
-# commonly used. You can find more settings consulting the documentation:
-#
-#     https://docs.scrapy.org/en/latest/topics/settings.html
-#     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
+"""Scrapy settings for the regulatory crawler.
+
+Politeness is fixed here (CLAUDE.md rule 2) and is not configurable per source: robots.txt is
+obeyed, the User-Agent identifies us with a contact address, requests to one domain are sequential
+and at least 2 seconds apart, and nothing is retried except server errors and timeouts.
+
+Not done here, on purpose (rule 1): no proxies, no User-Agent or header rotation, no cookie reuse,
+no stealth. A blocked source is recorded as BLOCKED and left alone.
+
+Profiles: REGCRAWLER_PROFILE=dev turns the HTTP cache on for local development (fewer requests to
+real sites while building selectors). Production runs never use it.
+"""
+
+import os
+import sys
+
+from regcrawler.config import DATA_DIR, ROOT, load_config
+
+# The crawler imports app.repositories / app.services, and is started from the crawler/ folder.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+# Paths are anchored to the repository root so the database and stored files are the same ones the
+# web app uses, whichever folder the crawl is started from.
+os.environ.setdefault("FILES_ROOT", str(ROOT))
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{(DATA_DIR / 'reg_monitor.db').as_posix()}")
+os.environ.setdefault("REPO_BACKEND", "sql")
+
+PROFILE = os.environ.get("REGCRAWLER_PROFILE", "prod").strip().lower()
 
 BOT_NAME = "regcrawler"
-
 SPIDER_MODULES = ["regcrawler.spiders"]
 NEWSPIDER_MODULE = "regcrawler.spiders"
-
 ADDONS = {}
 
-
-# Crawl responsibly by identifying yourself (and your website) on the user-agent
-#USER_AGENT = "regcrawler (+http://www.yourdomain.com)"
-
-# Obey robots.txt rules
+# --- Politeness (rule 2) -----------------------------------------------------------------------
 ROBOTSTXT_OBEY = True
-
-# Concurrency and throttling settings
-#CONCURRENT_REQUESTS = 16
+USER_AGENT = f"TVSCredit-RegMonitor/0.1 (+{load_config().contact})"
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 2
+AUTOTHROTTLE_MAX_DELAY = 30
+AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
+DOWNLOAD_DELAY = 2
+# Scrapy 2.20: the default jitter would shorten some delays to 1 second; keep every gap >= 2 s.
+DOWNLOAD_DELAY_JITTER = 0
+CONCURRENT_REQUESTS = 1
 CONCURRENT_REQUESTS_PER_DOMAIN = 1
-DOWNLOAD_DELAY = 1
+DOWNLOAD_TIMEOUT = 30
+DOWNLOAD_MAXSIZE = 25 * 1024 * 1024
 
-# Disable cookies (enabled by default)
-#COOKIES_ENABLED = False
+# --- Retries: server errors and timeouts only, with the request exactly as it was ---------------
+RETRY_ENABLED = True
+RETRY_TIMES = 2
+RETRY_HTTP_CODES = [500, 502, 503, 504, 522, 524]  # never 403/429: those are blocks, not faults
 
-# Disable Telnet Console (enabled by default)
-#TELNETCONSOLE_ENABLED = False
+# --- Statelessness: no cookies are kept between requests -------------------------------------
+COOKIES_ENABLED = False
+TELNETCONSOLE_ENABLED = False
 
-# Override the default request headers:
-#DEFAULT_REQUEST_HEADERS = {
-#    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-#    "Accept-Language": "en",
-#}
+# --- Pipeline order: Snapshot (raw bytes) -> Normalise -> DB write -------------------------------
+DOWNLOADER_MIDDLEWARES = {
+    # 560: after the redirect (600) and decompression (590) middlewares, so we judge the final,
+    # decoded response, and before the retry middleware (550), so a block is never retried.
+    "regcrawler.middlewares.BlockDetectionMiddleware": 560,
+}
+ITEM_PIPELINES = {
+    "regcrawler.pipelines.SnapshotPipeline": 100,
+    "regcrawler.pipelines.NormalisePipeline": 200,
+    "regcrawler.pipelines.DbPipeline": 300,
+}
 
-# Enable or disable spider middlewares
-# See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-#SPIDER_MIDDLEWARES = {
-#    "regcrawler.middlewares.RegcrawlerSpiderMiddleware": 543,
-#}
+# --- Cache (dev profile only) ------------------------------------------------------------------
+HTTPCACHE_ENABLED = PROFILE == "dev"
+HTTPCACHE_DIR = str(DATA_DIR / "httpcache")
+HTTPCACHE_EXPIRATION_SECS = 6 * 60 * 60
+HTTPCACHE_IGNORE_HTTP_CODES = [401, 403, 429, 500, 502, 503, 504]
 
-# Enable or disable downloader middlewares
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#DOWNLOADER_MIDDLEWARES = {
-#    "regcrawler.middlewares.RegcrawlerDownloaderMiddleware": 543,
-#}
+# --- Logs go to data/logs/ ---------------------------------------------------------------------
+LOG_DIR = DATA_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = str(LOG_DIR / "crawler.log")  # the crawl runner overrides it per run with -s LOG_FILE=
+LOG_LEVEL = "INFO"
 
-# Enable or disable extensions
-# See https://docs.scrapy.org/en/latest/topics/extensions.html
-#EXTENSIONS = {
-#    "scrapy.extensions.telnet.TelnetConsole": None,
-#}
-
-# Configure item pipelines
-# See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    "regcrawler.pipelines.RegcrawlerPipeline": 300,
-#}
-
-# Enable and configure the AutoThrottle extension (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/autothrottle.html
-#AUTOTHROTTLE_ENABLED = True
-# The initial download delay
-#AUTOTHROTTLE_START_DELAY = 5
-# The maximum download delay to be set in case of high latencies
-#AUTOTHROTTLE_MAX_DELAY = 60
-# The average number of requests Scrapy should be sending in parallel to
-# each remote server
-#AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
-# Enable showing throttling stats for every response received:
-#AUTOTHROTTLE_DEBUG = False
-
-# Enable and configure HTTP caching (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-#HTTPCACHE_ENABLED = True
-#HTTPCACHE_EXPIRATION_SECS = 0
-#HTTPCACHE_DIR = "httpcache"
-#HTTPCACHE_IGNORE_HTTP_CODES = []
-#HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
-
-# Set settings whose default value is deprecated to a future-proof value
 DOWNLOADER_MIDDLEWARE_RESPONSE_EXCEPTIONS = True
 FEED_EXPORT_ENCODING = "utf-8"
 FEED_MODE = "create"
