@@ -213,6 +213,7 @@ erDiagram
     bool active
     int current_version
     bool planned
+    int position
   }
   SOURCE_CHECK {
     string id PK
@@ -290,14 +291,17 @@ Every table and column in §4 exists. These differences are deliberate:
 1. **M1 additions are included.** The columns listed under "Additions made in M1" in §4
    (`source.planned`, `source_version.decided_at` / `reject_reason`, `regulatory_item.summary`,
    `document.filename`, `review_decision.is_draft`, `daily_update.prepared_by` / `exported_at`,
-   `setting.pending`) are in the models, because the review and approval flows need them.
+   `setting.pending`) are in the models, because the review and approval flows need them. Migration
+   `0002` adds `source.position` (register order), which the SQL repository sorts sources by.
 2. **New table `internal_ref_counter`** (`year`, `last_value`) for the reference generator.
 3. **`sme_function`, `recipient` and `email_template` exist as tables, but the POC does not write
    to them.** Prompt 6 stores the approved SME routing, recipients and email wording as versioned
    rows in `setting` (`sme-routing`, `recipients`, `email-template`) so they share the
    approval and audit path. The tables are there because §4 lists them. **Open decision for the
    SQL repository (Prompt 8):** keep reading these three from `setting`, or write the tables on
-   approval. Until then, treat `setting` as the source of truth.
+   approval. **Decided in Prompt 8:** the SQL repository reads these three from `setting`, exactly
+   like the in-memory one, so there is one source of truth and one approval path. The three tables
+   stay empty and unused until a later migration removes them or a future need arises.
 4. **Extra uniqueness rules** listed above (`manual_check`, `source_check`, `daily_update`,
    `daily_update_item`, `source_version (source_id, version)`, `app_user.email`). They state rules
    the services already apply; the database now refuses a violation.

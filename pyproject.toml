@@ -18,6 +18,7 @@ dependencies = [
     "pdfplumber",
     "apscheduler",
     "pyyaml",
+    "openpyxl",
     "python-dotenv",
     "structlog",
 ]

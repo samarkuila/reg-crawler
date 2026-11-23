@@ -15,7 +15,7 @@ migrate:
 	$(PY) -m alembic upgrade head
 
 seed-demo:
-	@echo "not implemented until Prompt 8"
+	$(PY) -m app.cli seed-demo
 
 crawl:
 	@echo "not implemented until Prompt 13"

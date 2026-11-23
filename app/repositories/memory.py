@@ -135,7 +135,9 @@ class MemoryRepository:
     # --- users -------------------------------------------------------------------------------
 
     def list_users(self) -> list[AppUser]:
-        return self._all("users")
+        # Same order on every backend: reviewer, approver, admin, viewer; then by name.
+        rank = {"reviewer": 0, "approver": 1, "admin": 2, "viewer": 3}
+        return sorted(self._all("users"), key=lambda u: (rank[u.role.value], u.name))
 
     def get_user(self, user_id: str) -> AppUser | None:
         return self._get("users", user_id)
@@ -292,7 +294,7 @@ class MemoryRepository:
         checks = self._all("checks")
         if run_id is not None:
             checks = [c for c in checks if c.run_id == run_id]
-        return checks
+        return sorted(checks, key=lambda c: c.id)
 
     def get_source_check(self, check_id: str) -> SourceCheck | None:
         return self._get("checks", check_id)
@@ -334,7 +336,7 @@ class MemoryRepository:
     # --- items, evidence, decisions ----------------------------------------------------------
 
     def list_items(self, f: ItemFilter) -> list[RegulatoryItem]:
-        items = self._all("items")
+        items = sorted(self._all("items"), key=lambda i: (i.first_seen_at, i.id))
         if f.cycle is not None:
             run_ids = {r.id for r in self.find_runs(f.cycle)}
             in_cycle = {o.item_id for o in self._s["observations"].values() if o.run_id in run_ids}
@@ -361,15 +363,21 @@ class MemoryRepository:
     def get_item(self, item_id: str) -> RegulatoryItem | None:
         return self._get("items", item_id)
 
+    def _ordered_observations(self, keep: Any) -> list[ItemObservation]:
+        started = {r.id: r.started_at for r in self._s["runs"].values()}
+        found = [o for o in self._all("observations") if keep(o) and o.run_id in started]
+        return sorted(found, key=lambda o: (started[o.run_id], o.id))
+
     def list_observations(self, item_id: str) -> list[ItemObservation]:
-        return [o for o in self._all("observations") if o.item_id == item_id]
+        return self._ordered_observations(lambda o: o.item_id == item_id)
 
     def list_observations_for_runs(self, run_ids: list[str]) -> list[ItemObservation]:
         wanted = set(run_ids)
-        return [o for o in self._all("observations") if o.run_id in wanted]
+        return self._ordered_observations(lambda o: o.run_id in wanted)
 
     def list_documents(self, item_id: str) -> list[Document]:
-        return [d for d in self._all("documents") if d.item_id == item_id]
+        docs = [d for d in self._all("documents") if d.item_id == item_id]
+        return sorted(docs, key=lambda d: (d.fetched_at is None, d.fetched_at or now_ist(), d.id))
 
     def get_document(self, document_id: str) -> Document | None:
         return self._get("documents", document_id)
@@ -403,7 +411,7 @@ class MemoryRepository:
 
     def list_decisions(self, item_id: str) -> list[ReviewDecision]:
         decisions = [d for d in self._all("decisions") if d.item_id == item_id]
-        return sorted(decisions, key=lambda d: d.decided_at)
+        return sorted(decisions, key=lambda d: (d.decided_at, d.id))
 
     def save_decisions(
         self, decisions: list[ReviewDecision], new_state: ItemState, actor: str
@@ -446,7 +454,8 @@ class MemoryRepository:
             for uid, rows in self._update_rows.items()
             if any(r.item_id == item_id for r in rows)
         }
-        return [u for u in self._all("daily_updates") if u.id in ids]
+        found = [u for u in self._all("daily_updates") if u.id in ids]
+        return sorted(found, key=lambda u: (u.cycle_date, u.id))
 
     def save_daily_update(
         self, update: DailyUpdate, rows: list[DailyUpdateItem], actor: str
@@ -602,4 +611,4 @@ class MemoryRepository:
             events = [e for e in events if e.ts.date() >= date_from]
         if date_to:
             events = [e for e in events if e.ts.date() <= date_to]
-        return sorted(events, key=lambda e: e.ts, reverse=True)
+        return sorted(events, key=lambda e: (e.ts, e.id), reverse=True)

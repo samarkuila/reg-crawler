@@ -114,6 +114,41 @@ _EGAZETTE_MINISTRIES_V2 = ["Finance", "MSME", "Communications", "Telecommunicati
 _EGAZETTE_MINISTRIES_V3 = [*_EGAZETTE_MINISTRIES_V2, "Electronics and IT", "Labour and Employment"]
 _NBFC_KEYWORDS = ["NBFC", "non-banking", "regulated entities", "all lending institutions"]
 
+# Default keywords and guidance (FR-31, Prompt 8). Ranking only: keywords never hide an item.
+INCLUDE_KEYWORDS = [*_NBFC_KEYWORDS, "KYC", "AML", "sanctions", "FEMA", "DPDP"]
+EXCLUDE_KEYWORDS = [
+    "auction",
+    "variable rate repo",
+    "money market operations",
+    "maintenance",
+    "downtime",
+    "marks obtained",
+    "vacancy",
+    "recruitment",
+    "tender",
+    "bid",
+    "procurement",
+    "citizenship",
+    "gross direct premium",
+]
+SCREENING_GUIDANCE = (
+    "A regulatory update is anything where a regulator requires or informs regulated entities "
+    "like TVS Credit (an NBFC) and that has an economic, social, operational or administrative "
+    "impact on TVS Credit. Ignore regulators' own vacancies, tenders, events and maintenance "
+    "notices."
+)
+# FR-35. Placeholders: Compliance completes and approves these. `held` is None until they do.
+ENTITY_PROFILE = {
+    "status": "PLACEHOLDER: Compliance to complete and approve",
+    "items": [
+        {"name": "NBFC registered with RBI", "held": None, "note": "e.g. deposit-taking or not"},
+        {"name": "Payment system participant", "held": None, "note": "Confirm"},
+        {"name": "Insurance corporate agent", "held": None, "note": "Confirm"},
+        {"name": "FEMA authorised dealer", "held": None, "note": "Confirm"},
+        {"name": "Reporting entity under PMLA", "held": None, "note": "Confirm"},
+    ],
+}
+
 
 def _source(
     id: str,
@@ -814,31 +849,20 @@ def settings() -> list[Setting]:
         ),
         s(
             "exclusion-keywords",
-            [
-                "auction",
-                "variable rate repo",
-                "variable rate reverse repo",
-                "money market operations",
-                "maintenance",
-                "downtime",
-                "result",
-                "marks",
-                "vacancy",
-                "recruitment",
-                "tender",
-                "bid invitation",
-                "procurement",
-                "citizenship",
-                "premium statistics",
-            ],
+            EXCLUDE_KEYWORDS,
             "Ranking only: matches rank an item lower, never hide it",
         ),
-        s("relevance-keywords", _NBFC_KEYWORDS, "Words that rank an item higher"),
+        s("relevance-keywords", INCLUDE_KEYWORDS, "Words that rank an item higher"),
         s("low-relevance-threshold", 30, "Items scoring below this are collapsed, never hidden"),
         s(
             "screening-guidance",
-            {"text": ""},
+            {"text": SCREENING_GUIDANCE},
             "Luna screening guidance. Owned and approved by Compliance",
+        ),
+        s(
+            "entity-profile",
+            ENTITY_PROFILE,
+            "Licences and roles TVS Credit holds. Compliance owns it",
         ),
     ]
 
@@ -914,11 +938,8 @@ def load_seed(repo: MemoryRepository) -> MemoryRepository:
     repo.load(sources())
     repo.load(source_versions())
     repo.load(runs())
+    repo.load(snaps)  # before the checks that point at them
     repo.load(checks)
-    repo.load(snaps)
-    for snap in snaps:
-        repo.load_blob(snap.sha256, snapshot_bytes(snap.id, snap.url))
-    repo.load_blob(IORS_DOCUMENT_SHA, IORS_DOCUMENT)
     repo.load(items())
     repo.load(observations())
     repo.load(documents())
@@ -926,4 +947,8 @@ def load_seed(repo: MemoryRepository) -> MemoryRepository:
     repo.load([update, *rows])
     repo.load(settings())
     repo.load(audit_history())
+    # Stored copies go last: the SQL repository writes each one where its row says.
+    for snap in snaps:
+        repo.load_blob(snap.sha256, snapshot_bytes(snap.id, snap.url))
+    repo.load_blob(IORS_DOCUMENT_SHA, IORS_DOCUMENT)
     return repo
