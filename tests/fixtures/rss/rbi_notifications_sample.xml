@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>RBI Notifications</title>
+    <link>https://www.rbi.org.in</link>
+    <description>Notifications - Reserve Bank of India (synthetic test fixture)</description>
+    <item>
+      <title>Reserve Bank of India (Non-Banking Financial Companies - Know Your Customer) Amendment Directions, 2026</title>
+      <link>https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13001&amp;Mode=0</link>
+      <description>&lt;p&gt;RBI/2026-27/45&lt;/p&gt;&lt;p&gt;DOR.AML.REC.12/14.01.001/2026-27&lt;/p&gt;&lt;p&gt;All NBFCs are advised to update customer due diligence procedures with effect from &lt;b&gt;01.12.2026&lt;/b&gt;.&lt;/p&gt;</description>
+      <pubDate>Fri, 20 Nov 2026 17:45:00 +0530</pubDate>
+      <guid isPermaLink="false">rbi-notification-13001</guid>
+    </item>
+    <item>
+      <title>Auction of Government of India Dated Securities</title>
+      <link>https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13002&amp;Mode=0&amp;utm_source=rss</link>
+      <description>&lt;p&gt;Auction details for the week.&lt;/p&gt;</description>
+      <pubDate>Fri, 20 Nov 2026 11:00:00 +0530</pubDate>
+      <guid isPermaLink="false">rbi-notification-13002</guid>
+    </item>
+    <item>
+      <title>Foreign Exchange Management (Overseas Investment) Amendment Regulations, 2026</title>
+      <link>https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13003&amp;Mode=0</link>
+      <description>&lt;p&gt;Notification FEMA 120(R)/2026-RB&lt;/p&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;Schedule I&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</description>
+      <pubDate>Thu, 19 Nov 2026 19:10:00 +0530</pubDate>
+      <guid isPermaLink="false">rbi-notification-13003</guid>
+    </item>
+  </channel>
+</rss>

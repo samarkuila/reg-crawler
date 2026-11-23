@@ -96,7 +96,16 @@ class NormalisePipeline:
         item["title"] = title or url
 
         raw_date = item.get("displayed_date")
-        parsed = normalise.parse_date(raw_date, config.get("date_format"))
+        # `date_format` in a source's adapter_config describes its HTML pages only. Feeds and data
+        # files have their own formats (RSS pubDate is RFC 822), so they use `rss_date_format` /
+        # `xml_date_format` if a source sets one, and the general reader otherwise.
+        channel = str(item.get("channel", "")).upper()
+        date_format = (
+            config.get("date_format")
+            if channel == "HTML"
+            else config.get(f"{channel.lower()}_date_format")
+        )
+        parsed = normalise.parse_date(raw_date, date_format)
         if raw_date and not (hasattr(raw_date, "isoformat") and parsed):
             extra.setdefault("displayed_date_raw", str(raw_date))
         item["displayed_date"] = parsed
@@ -171,7 +180,7 @@ class DbPipeline:
                     CheckStatus.FAILED,
                     "No page was fetched (robots.txt disallowed it, or the site did not answer)",
                 )
-            elif found == 0:
+            elif found == 0 and not state.empty_is_ok:
                 status = CheckStatus.ZERO_ITEMS
             else:
                 status = CheckStatus.OK

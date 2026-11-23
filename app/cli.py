@@ -3,6 +3,7 @@
     python -m app.cli import-sources config/sources.yaml --actor "Samarendra K."
     python -m app.cli import-monitoring-excel monitoring.xlsx --actor "Samarendra K."
     python -m app.cli seed-demo [--reset]
+    python -m app.cli new-run --actor "Samarendra K." [--cycle ADHOC]
 
 These always use the SQL database (DATABASE_URL, default data/reg_monitor.db). Imports only
 propose changes: nothing becomes live until a different person approves it in the app.
@@ -36,6 +37,16 @@ def cmd_import_excel(args: argparse.Namespace) -> int:
     service = SourceImportService(_repository())
     report = service.import_excel(args.file, args.actor, dry_run=args.dry_run)
     print("\n".join(report.lines(args.dry_run)))
+    return 0
+
+
+def cmd_new_run(args: argparse.Namespace) -> int:
+    """Create a crawl run (needed by `scrapy crawl ... -a run_id=<id>` when run by hand)."""
+    from app.schemas.entities import now_ist
+    from app.schemas.enums import Cycle
+
+    run = _repository().create_run(Cycle(args.cycle), now_ist().date(), args.actor, args.actor)
+    print(run.id)
     return 0
 
 
@@ -93,6 +104,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", required=True, help="Your name as shown in the app")
     p.add_argument("--dry-run", action="store_true", help="Show what would be proposed")
     p.set_defaults(func=cmd_import_excel)
+
+    p = sub.add_parser("new-run", help="Create a crawl run and print its id (manual crawls)")
+    p.add_argument("--actor", required=True, help="Your name as shown in the app")
+    p.add_argument("--cycle", default="ADHOC", choices=["MORNING", "EOD", "ADHOC", "URGENT"])
+    p.set_defaults(func=cmd_new_run)
 
     p = sub.add_parser("seed-demo", help="Load the mockup demo data into an empty database")
     p.add_argument("--reset", action="store_true", help="Delete the SQLite file first")

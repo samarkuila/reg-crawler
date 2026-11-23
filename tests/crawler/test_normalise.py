@@ -144,3 +144,30 @@ def test_pipeline_never_drops_a_row_and_falls_back_to_the_url_as_title(crawler) 
         ListingItem(channel="HTML", url="https://rbi.org.in/a", title="  ")
     )
     assert item["title"] == "https://rbi.org.in/a"
+
+
+def test_a_sources_html_date_format_is_not_applied_to_its_feed(crawler) -> None:
+    # rbi's adapter_config says "%b %d, %Y" for its HTML pages; an RSS pubDate is RFC 822.
+    crawler.spider.source.adapter_config["date_format"] = "%b %d, %Y"
+    pipeline = NormalisePipeline(crawler)
+    rss = pipeline.process_item(
+        ListingItem(
+            channel="RSS",
+            url="https://rbi.org.in/a",
+            title="T",
+            displayed_date="Fri, 20 Nov 2026 17:45:00 +0530",
+        )
+    )
+    html = pipeline.process_item(
+        ListingItem(
+            channel="HTML", url="https://rbi.org.in/b", title="T", displayed_date="Nov 20, 2026"
+        )
+    )
+    assert rss["displayed_date"] == date(2026, 11, 20)
+    assert html["displayed_date"] == date(2026, 11, 20)
+    wrong = pipeline.process_item(
+        ListingItem(
+            channel="HTML", url="https://rbi.org.in/c", title="T", displayed_date="20/11/2026"
+        )
+    )
+    assert wrong["displayed_date"] is None  # strict for HTML, as configured

@@ -7,7 +7,9 @@ Not a runnable spider (it has no `name`). The `rss`, `listing` and `unsc_xml` sp
 Scrapy 2.13+ start API: subclasses implement `async def start(self)`.
 """
 
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import scrapy
 from scrapy.exceptions import IgnoreRequest
@@ -16,7 +18,8 @@ from scrapy.spidermiddlewares.httperror import HttpError
 from twisted.python.failure import Failure
 
 from app.repositories.base import Repository
-from app.schemas.enums import CheckChannel
+from app.schemas.entities import Snapshot
+from app.schemas.enums import CheckChannel, CheckStatus
 from regcrawler.items import SnapshotItem
 from regcrawler.repo import get_repository
 from regcrawler.state import CheckTracker
@@ -30,6 +33,7 @@ class BaseRegSpider(scrapy.Spider):
         source: str | None = None,
         run_id: str | None = None,
         repository: Repository | None = None,
+        fixture: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -52,6 +56,13 @@ class BaseRegSpider(scrapy.Spider):
         self.source = found  # loaded from the DB, never from a file
         self.run = run
         self.check = CheckTracker(expected=self.channels)
+        # Offline mode: `-a fixture=<file>` reads a saved file instead of the website. Everything
+        # else (block detection, snapshot, pipelines) runs as usual; the snapshot URL shows file://.
+        self.fixture = Path(fixture).expanduser().resolve() if fixture else None
+        if self.fixture is not None:
+            if not self.fixture.is_file():
+                raise ValueError(f"fixture file not found: {fixture}")
+            self.logger.warning("OFFLINE: reading %s instead of the website", self.fixture)
 
     @classmethod
     def from_crawler(cls, crawler: Any, *args: Any, **kwargs: Any) -> "BaseRegSpider":
@@ -59,6 +70,36 @@ class BaseRegSpider(scrapy.Spider):
         return super().from_crawler(crawler, *args, **kwargs)
 
     # --- helpers for subclasses ----------------------------------------------------------------
+
+    def target(self, url: str) -> str:
+        """The URL to request: the real one, or the saved file in offline mode."""
+        return self.fixture.as_uri() if self.fixture is not None else url
+
+    def previous_snapshot(self, channel: CheckChannel) -> tuple[Snapshot, bytes] | None:
+        """The latest earlier healthy snapshot of this source's channel, with its stored bytes.
+
+        Offline (file://) and live snapshots are never mixed, so a fixture run cannot become the
+        baseline of a live run, or the other way round.
+        """
+        best: Snapshot | None = None
+        for check in self.repo.list_source_checks():
+            if (
+                check.source_id != self.source.id
+                or check.channel != channel
+                or check.run_id == self.run.id
+                or check.status != CheckStatus.OK
+                or not check.snapshot_id
+            ):
+                continue
+            snap = self.repo.get_snapshot(check.snapshot_id)
+            if snap is None or (urlsplit(snap.url).scheme == "file") != (self.fixture is not None):
+                continue
+            if best is None or snap.fetched_at > best.fetched_at:
+                best = snap
+        if best is None:
+            return None
+        content = self.repo.read_blob(best.sha256)
+        return None if content is None else (best, content)
 
     def get(self, url: str, channel: CheckChannel, callback: Any, **meta: Any) -> scrapy.Request:
         """A plain GET with the channel noted (blocks and errors are recorded per channel)."""
@@ -88,12 +129,12 @@ class BaseRegSpider(scrapy.Spider):
             channel = CheckChannel(str(request.meta.get("channel", "HTML")).upper())
         except ValueError:
             channel = CheckChannel.HTML
-        if failure.check(IgnoreRequest):
+        if failure.check(HttpError):  # first: HttpError is itself an IgnoreRequest
+            status = failure.value.response.status
+            self.check.fail(channel, f"HTTP {status}", status)
+        elif failure.check(IgnoreRequest):
             # Dropped on purpose: after a block (already recorded) or by robots.txt.
             if not self.check.blocked:
                 self.check.fail(channel, str(failure.value) or "Request dropped")
-        elif failure.check(HttpError):
-            status = failure.value.response.status
-            self.check.fail(channel, f"HTTP {status}", status)
         else:
             self.check.fail(channel, f"{failure.type.__name__}: {failure.getErrorMessage()}")
