@@ -10,6 +10,7 @@ from typing import Any
 from app.repositories.base import Repository
 from app.schemas.api import (
     SettingView,
+    SmeFunctionOption,
     SourceChanges,
     SourceCreate,
     SourceTestResult,
@@ -37,6 +38,14 @@ _HOW = {
 class ConfigService:
     def __init__(self, repo: Repository) -> None:
         self._repo = repo
+
+    def list_sme_functions(self) -> list[SmeFunctionOption]:
+        """Active SME functions for the review form's dropdown (id + name only)."""
+        return [
+            SmeFunctionOption(id=f.id, name=f.name)
+            for f in self._repo.list_sme_functions()
+            if f.active
+        ]
 
     # --- sources -----------------------------------------------------------------------------
 

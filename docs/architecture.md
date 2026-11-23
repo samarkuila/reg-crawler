@@ -174,6 +174,7 @@ erDiagram
 | PUT | `/settings/{key}` | Propose a value → pending (maker) |
 | POST | `/settings/{key}/approve` · `/reject` | Approver ≠ requester (checker) |
 | GET | `/sources/{id}/versions` | Version history with before/after |
+| GET | `/sme-functions` | Active SME functions (id, name) for the review form |
 | GET | `/audit?entity=&actor=&from=&to=` · `/audit/export.csv` | Audit |
 
 Session helpers (POC): `GET /api/v1/me`, `GET /api/v1/users`, `GET /api/v1/health`; the header user switcher posts to `/switch-user` (cookie `poc_user`, hidden when `APP_ENV=prod`).

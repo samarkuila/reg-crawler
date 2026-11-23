@@ -64,13 +64,17 @@ def index() -> RedirectResponse:
     return RedirectResponse("/review", status_code=307)
 
 
+# Screens that have their own template (the rest use the generic "not built yet" shell).
+PAGE_TEMPLATES: dict[str, str] = {"review": "pages/review.html"}
+
+
 def _make_page(path: str) -> None:
     nav, title, lead = PAGES[path]
 
     def view(request: Request, services: Services = Depends(get_services)) -> HTMLResponse:
         ctx = page_context(request, services, nav)
         ctx.update(title=title, lead=lead, page_key=nav)
-        return templates.TemplateResponse(request, "pages/shell.html", ctx)
+        return templates.TemplateResponse(request, PAGE_TEMPLATES.get(nav, "pages/shell.html"), ctx)
 
     view.__name__ = f"page_{nav}"
     router.add_api_route(path, view, methods=["GET"], response_class=HTMLResponse)
