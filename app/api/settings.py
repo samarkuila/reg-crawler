@@ -3,11 +3,20 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import current_user, get_services
-from app.schemas.api import SettingIn, SettingRejectIn, SettingView
+from app.schemas.api import SettingIn, SettingRejectIn, SettingView, SmeFunctionOption
 from app.schemas.entities import AppUser
 from app.services import Services
 
 router = APIRouter(tags=["settings"])
+
+
+@router.get(
+    "/sme-functions",
+    response_model=list[SmeFunctionOption],
+    summary="Active SME functions (for the review form)",
+)
+def list_sme_functions(services: Services = Depends(get_services)) -> list[SmeFunctionOption]:
+    return services.config.list_sme_functions()
 
 
 @router.get("/settings", response_model=list[SettingView], summary="All settings")

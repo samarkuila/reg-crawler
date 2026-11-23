@@ -156,6 +156,7 @@ class ItemSummary(Model):
     relevance_reason: str | None
     priority: Priority
     state: ItemState
+    state_label: str
     change_type: ChangeType | None
     badges: list[str]
     note: str | None
@@ -285,6 +286,11 @@ class DailyUpdatePreview(Model):
     can_approve: bool
     approved_by: str | None
     approved_at: datetime | None
+
+
+class SmeFunctionOption(Model):
+    id: str
+    name: str
 
 
 class ReorderIn(Model):

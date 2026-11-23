@@ -66,6 +66,14 @@ STATUS_LABELS = {
     CheckStatus.PARSE_ERROR: "Parse error",
     CheckStatus.ZERO_ITEMS: "Zero items",
 }
+ITEM_STATE_LABELS = {
+    ItemState.DETECTED: "Pending",
+    ItemState.ENRICHED: "Pending",
+    ItemState.NEEDS_MANUAL_FETCH: "Needs manual fetch",
+    ItemState.IN_REVIEW: "In review",
+    ItemState.DECIDED: "Decided",
+    ItemState.PUBLISHED: "Published",
+}
 DECIDED_STATES = {ItemState.DECIDED, ItemState.PUBLISHED}
 _PREFILLED_FIELDS = (
     "ref_no_and_date",
@@ -284,6 +292,7 @@ class ReviewService:
             relevance_reason=item.relevance_reason,
             priority=item.priority,
             state=item.state,
+            state_label=ITEM_STATE_LABELS[item.state],
             change_type=change,
             badges=badges,
             note=note,
