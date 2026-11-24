@@ -2,11 +2,16 @@
 
 Not a runnable spider (it has no `name`). The `rss`, `listing` and `unsc_xml` spiders extend it.
 
-    scrapy crawl <spider> -a source=<source id> -a run_id=<crawl run id>
+    scrapy crawl <spider> -a source=<source id> -a run_id=<crawl run id> [-a lookback_days=<N>]
+        [-a first_run=1 -a first_run_window=YYYY-MM-DD] [-a max_requests=<N>]
+
+`lookback_days` (default 7) is how many calendar days back the spider mainly reads. It limits how
+deep a spider pages; it never decides what is new (rule 6) and never drops a row (rule 3).
 
 Scrapy 2.13+ start API: subclasses implement `async def start(self)`.
 """
 
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -24,6 +29,9 @@ from regcrawler.items import SnapshotItem
 from regcrawler.repo import get_repository
 from regcrawler.state import CheckTracker
 
+DEFAULT_LOOKBACK_DAYS = 7
+MAX_REQUESTS_PER_HOST = 50  # page requests to one website in one run (never exceeded)
+
 
 class BaseRegSpider(scrapy.Spider):
     channels: tuple[CheckChannel, ...] = ()  # channels this spider reads; each gets a source_check
@@ -37,6 +45,10 @@ class BaseRegSpider(scrapy.Spider):
         dry_run: str | bool | None = None,
         source_json: str | None = None,
         out: str | None = None,
+        lookback_days: str | int | None = None,
+        first_run: str | bool | None = None,
+        first_run_window: str | None = None,
+        max_requests: str | int | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -45,6 +57,30 @@ class BaseRegSpider(scrapy.Spider):
         # the database or to the stored files; parsed rows go to the file named by `out`.
         self.dry_run = str(dry_run).lower() in ("1", "true", "yes") if dry_run else False
         self.out = Path(out) if out else None
+        if lookback_days in (None, ""):
+            self.lookback_days = DEFAULT_LOOKBACK_DAYS
+        else:
+            try:
+                self.lookback_days = int(lookback_days)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"lookback_days must be a whole number, got {lookback_days!r}"
+                ) from None
+            if self.lookback_days < 1:
+                raise ValueError("lookback_days must be at least 1")
+        # First crawl of a source: paging stops at the first-run window instead of the lookback.
+        # first_run_window empty = no limit (mode all).
+        self.first_run = str(first_run).lower() in ("1", "true", "yes") if first_run else False
+        self.first_run_window: date | None = (
+            date.fromisoformat(first_run_window) if first_run_window else None
+        )
+        # The most page requests this crawl may make (what is left of this run's 50 per host).
+        self.request_cap = (
+            min(int(max_requests), MAX_REQUESTS_PER_HOST)
+            if max_requests not in (None, "")
+            else MAX_REQUESTS_PER_HOST
+        )
+        self.requests_made = 0  # page requests made by this crawl
         self.repo: Repository | None = None
         self.run: Any = None
         if self.dry_run:
@@ -91,6 +127,23 @@ class BaseRegSpider(scrapy.Spider):
         """The crawl run id (None in a dry run, which belongs to no run)."""
         return self.run.id if self.run else None
 
+    def today(self) -> date:
+        return date.today()
+
+    @property
+    def window_start(self) -> date | None:
+        """The oldest calendar day inside the window; None = no limit (first crawl, mode all).
+
+        First crawl: the first-run window. Later crawls: the lookback (today counts as day 1).
+        """
+        if self.first_run:
+            return self.first_run_window
+        return self.today() - timedelta(days=self.lookback_days - 1)
+
+    @property
+    def can_request_more(self) -> bool:
+        return self.requests_made < self.request_cap
+
     def target(self, url: str) -> str:
         """The URL to request: the real one, or the saved file in offline mode."""
         return self.fixture.as_uri() if self.fixture is not None else url
@@ -125,6 +178,7 @@ class BaseRegSpider(scrapy.Spider):
 
     def get(self, url: str, channel: CheckChannel, callback: Any, **meta: Any) -> scrapy.Request:
         """A plain GET with the channel noted (blocks and errors are recorded per channel)."""
+        self.requests_made += 1
         return scrapy.Request(
             url,
             callback=callback,

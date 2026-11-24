@@ -6,6 +6,7 @@ from app.api import (
     agent,
     audit,
     daily_update,
+    db_admin,
     history,
     items,
     runs,
@@ -15,5 +16,16 @@ from app.api import (
 )
 
 api_router = APIRouter(prefix="/api/v1")
-for module in (session, runs, items, agent, daily_update, history, sources, settings, audit):
+for module in (
+    session,
+    runs,
+    items,
+    agent,
+    daily_update,
+    history,
+    sources,
+    settings,
+    audit,
+    db_admin,
+):
     api_router.include_router(module.router)

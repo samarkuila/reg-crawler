@@ -31,19 +31,23 @@ from app.schemas.enums import (
     AgentTask,
     AlertKind,
     Applicability,
+    BaselineStatus,
     ChangeType,
     Channel,
     CheckChannel,
     CheckStatus,
     Cycle,
     FetchStatus,
+    FirstRunMode,
     FlagStatus,
     FlagType,
+    ItemOrigin,
     ItemState,
     NbfcRelevance,
     Priority,
     RecipientKind,
     RunStatus,
+    SeenReason,
     SourceType,
     StatusColour,
     Treatment,
@@ -94,8 +98,22 @@ class Source(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=False)
     current_version: Mapped[int] = mapped_column(Integer, default=0)
     planned: Mapped[bool] = mapped_column(Boolean, default=False)  # (added)
+    retired: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # (added)
     # Register order (creation order). The SQL repository lists sources by this.
     position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # (added)
+    # First-crawl window and baseline (added 24.11.2026)
+    first_run_mode: Mapped[FirstRunMode | None] = mapped_column(
+        enum_column(FirstRunMode, "source_first_run_mode"), nullable=True
+    )
+    first_run_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sorted_newest_first: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    baseline_status: Mapped[BaselineStatus] = mapped_column(
+        enum_column(BaselineStatus, "source_baseline_status"),
+        default=BaselineStatus.NOT_BASELINED,
+        server_default="NOT_BASELINED",
+    )
+    baseline_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+    baseline_window_start: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class SourceVersion(Base):
@@ -163,6 +181,7 @@ class SourceCheck(Base):
     items_found: Mapped[int | None] = mapped_column(Integer)
     error_detail: Mapped[str | None] = mapped_column(Text)
     snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("snapshot.id"))
+    stats: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # (added) run counters
 
 
 class Alert(Base):
@@ -307,6 +326,28 @@ class RegulatoryItem(Base):
     first_seen_at: Mapped[datetime] = mapped_column(TZDateTime)
     last_seen_at: Mapped[datetime] = mapped_column(TZDateTime)
     summary: Mapped[str | None] = mapped_column(Text)  # (added)
+    origin: Mapped[ItemOrigin] = mapped_column(
+        enum_column(ItemOrigin, "regulatory_item_origin"),
+        default=ItemOrigin.CRAWL,
+        server_default="CRAWL",
+    )
+    flags: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+class SeenFingerprint(Base):
+    """(added 24.11.2026) Insert-only: items the first crawl saw but did not store."""
+
+    __tablename__ = "seen_fingerprint"
+    __table_args__ = (UniqueConstraint("source_id", "fingerprint"),)
+
+    id: Mapped[str] = _id()
+    source_id: Mapped[str] = mapped_column(ForeignKey("source.id"), index=True)
+    fingerprint: Mapped[str] = mapped_column(SHA)
+    title: Mapped[str] = mapped_column(Text)
+    published_date: Mapped[date | None] = mapped_column(Date)
+    first_seen_run_id: Mapped[str] = mapped_column(ForeignKey("crawl_run.id"))
+    first_seen_at: Mapped[datetime] = mapped_column(TZDateTime)
+    reason: Mapped[SeenReason] = mapped_column(enum_column(SeenReason, "seen_fingerprint_reason"))
 
 
 class InternalRefCounter(Base):

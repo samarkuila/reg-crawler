@@ -35,6 +35,7 @@ from app.schemas.entities import (
     Recipient,
     RegulatoryItem,
     ReviewDecision,
+    SeenFingerprint,
     Setting,
     SettingChange,
     SmeFunction,
@@ -44,7 +45,15 @@ from app.schemas.entities import (
     SourceVersion,
     now_ist,
 )
-from app.schemas.enums import Cycle, FlagStatus, ItemState, RunStatus, UpdateStatus, VersionStatus
+from app.schemas.enums import (
+    BaselineStatus,
+    Cycle,
+    FlagStatus,
+    ItemState,
+    RunStatus,
+    UpdateStatus,
+    VersionStatus,
+)
 
 _COLLECTIONS: dict[type[BaseModel], str] = {
     AppUser: "users",
@@ -84,6 +93,7 @@ class MemoryRepository:
         self._lock = threading.RLock()
         self._s: dict[str, dict[str, Any]] = {name: {} for name in _COLLECTIONS.values()}
         self._settings: dict[str, Setting] = {}
+        self._seen: dict[str, SeenFingerprint] = {}
         self._update_rows: dict[str, list[DailyUpdateItem]] = {}
         self._blobs: dict[str, bytes] = {}
         self._texts: dict[str, str] = {}
@@ -95,12 +105,19 @@ class MemoryRepository:
         """All-or-nothing: restore the previous state if the block raises."""
         with self._lock:
             backup = copy.deepcopy(
-                (self._s, self._settings, self._update_rows, self._blobs, self._texts)
+                (self._s, self._settings, self._update_rows, self._blobs, self._texts, self._seen)
             )
             try:
                 yield
             except BaseException:
-                self._s, self._settings, self._update_rows, self._blobs, self._texts = backup
+                (
+                    self._s,
+                    self._settings,
+                    self._update_rows,
+                    self._blobs,
+                    self._texts,
+                    self._seen,
+                ) = backup
                 raise
 
     def _audit(
@@ -180,6 +197,79 @@ class MemoryRepository:
                 _dump(version),
             )
             return source.model_copy(deep=True)
+
+    def create_sources_batch(
+        self, entries: list[tuple[Source, SourceVersion]], actor: str, batch: dict[str, Any]
+    ) -> list[Source]:
+        with self._txn():
+            created = [self.create_source(src, ver, actor) for src, ver in entries]
+            self._audit(
+                actor,
+                "source_import.batch",
+                "source_import",
+                batch["batch_id"],
+                {"rows_in_file": batch["rows_in_file"]},
+                batch,
+            )
+            return created
+
+    def set_source_baseline(
+        self,
+        source_id: str,
+        status: BaselineStatus,
+        window_start: date | None,
+        actor: str,
+        action: str,
+        detail: dict[str, Any],
+    ) -> Source:
+        with self._txn():
+            source = self._s["sources"][source_id]
+            before = _dump(source)
+            done = status == BaselineStatus.BASELINED
+            updated = source.model_copy(
+                update={
+                    "baseline_status": status,
+                    "baseline_at": now_ist() if done else None,
+                    "baseline_window_start": window_start if done else None,
+                }
+            )
+            self._s["sources"][source_id] = updated
+            self._audit(
+                actor,
+                action,
+                "source",
+                source_id,
+                {**before, "detail": None},
+                {**_dump(updated), "detail": detail},
+            )
+            return updated.model_copy(deep=True)
+
+    def add_seen_fingerprints(
+        self, rows: list[SeenFingerprint], actor: str
+    ) -> list[SeenFingerprint]:
+        with self._txn():
+            known = {(r.source_id, r.fingerprint) for r in self._seen.values()}
+            added = []
+            for row in rows:
+                key = (row.source_id, row.fingerprint)
+                if key in known:
+                    continue
+                known.add(key)
+                self._seen[row.id] = row.model_copy(deep=True)
+                added.append(row)
+            if added:
+                self._audit(
+                    actor,
+                    "seen_fingerprints.recorded",
+                    "source",
+                    added[0].source_id,
+                    None,
+                    {"count": len(added), "run_id": added[0].first_seen_run_id},
+                )
+            return [r.model_copy(deep=True) for r in added]
+
+    def list_seen_fingerprints(self, source_id: str) -> list[SeenFingerprint]:
+        return [r.model_copy(deep=True) for r in self._seen.values() if r.source_id == source_id]
 
     def list_source_versions(self, source_id: str) -> list[SourceVersion]:
         versions = [v for v in self._all("source_versions") if v.source_id == source_id]
@@ -501,6 +591,10 @@ class MemoryRepository:
             items = [i for i in items if i.channel == f.channel]
         if f.min_relevance is not None:
             items = [i for i in items if i.relevance_score >= f.min_relevance]
+        if f.origin is not None:
+            items = [i for i in items if i.origin == f.origin]
+        if f.exclude_origin is not None:
+            items = [i for i in items if i.origin != f.exclude_origin]
         if f.q:
             needle = f.q.strip().lower()
             sources = self._s["sources"]

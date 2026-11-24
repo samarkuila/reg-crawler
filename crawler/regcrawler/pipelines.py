@@ -143,6 +143,7 @@ class DbPipeline:
         self._repo = repository
         self.rows: dict[CheckChannel, list[RawListingItem]] = {}
         self.skipped: dict[CheckChannel, int] = {}
+        self._row_no = 0  # page order, so "the first N undated rows" is well defined
 
     @property
     def repo(self) -> Repository:
@@ -168,6 +169,9 @@ class DbPipeline:
         if not item.get("url"):
             self.skipped[channel] = self.skipped.get(channel, 0) + 1
             raise DropItem("Listing row without a URL cannot be identified; counted in the check")
+        self._row_no += 1
+        extra = dict(item.get("raw_extra") or {})
+        extra["row_no"] = self._row_no
         self.rows.setdefault(channel, []).append(
             RawListingItem(
                 id=_id("raw"),
@@ -179,7 +183,7 @@ class DbPipeline:
                 url=item["url"],
                 ref_no=item.get("ref_no"),
                 displayed_date=item.get("displayed_date"),
-                raw_extra=item.get("raw_extra") or {},
+                raw_extra=extra,
                 fetched_at=now_ist(),
             )
         )
@@ -209,6 +213,16 @@ class DbPipeline:
             items_found=result.count,
             error_detail=result.detail,
             snapshot_id=tracker.state(channel).snapshot_id,
+            stats={
+                "rows_parsed": found,
+                "pages_read": getattr(spider, "pages_read", None),
+                "requests_made": getattr(spider, "requests_made", None),
+                "window_start": (
+                    spider.window_start.isoformat()
+                    if getattr(spider, "window_start", None)
+                    else None
+                ),
+            },
         )
 
     def _write_dry_run(self, spider: Any, tracker: CheckTracker) -> None:

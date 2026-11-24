@@ -97,3 +97,23 @@ def test_a_block_is_never_retried_by_scrapy_settings() -> None:
     assert 403 not in settings.RETRY_HTTP_CODES and 429 not in settings.RETRY_HTTP_CODES
     # our middleware (560) sees a response before the retry middleware (550) does
     assert settings.DOWNLOADER_MIDDLEWARES["regcrawler.middlewares.BlockDetectionMiddleware"] > 550
+
+
+def test_a_robots_txt_answer_is_not_an_attempt_on_any_channel(middleware, spider) -> None:
+    # robots.txt has no `channel` meta. Live, RBI answered it with HTTP 418; that used to create a
+    # bogus "HTML returned no items" check for a feed-only crawl.
+    robots = Request("https://rbi.org.in/robots.txt")
+    response = html_response(b"I am a teapot", url=robots.url, status=418, request=robots)
+    assert middleware.process_response(robots, response) is response
+    assert CheckChannel.HTML not in spider.check.channels
+    assert not spider.check.blocked
+
+
+def test_a_blocked_robots_txt_still_blocks_the_source(middleware, spider) -> None:
+    robots = Request("https://rbi.org.in/robots.txt")
+    with pytest.raises(IgnoreRequest):
+        middleware.process_response(
+            robots, html_response(b"", url=robots.url, status=429, request=robots)
+        )
+    assert spider.check.blocked
+    assert spider.check.state(spider.channels[0]).status == CheckStatus.BLOCKED

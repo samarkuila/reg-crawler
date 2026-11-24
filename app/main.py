@@ -8,12 +8,26 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app.api import api_router
 from app.api.pages import router as pages_router
 from app.services.errors import DomainError
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+class RevalidatedStaticFiles(StaticFiles):
+    """Static files that browsers re-check on every load (a cheap 304 when nothing changed).
+
+    Without this a browser may keep running an old script after an update.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 @asynccontextmanager
@@ -38,7 +52,7 @@ app = FastAPI(
     version="0.1.0",
     description="TVS Credit compliance automation, Module 1 POC. Mock data unless REPO_BACKEND=sql",
 )
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+app.mount("/static", RevalidatedStaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(api_router)
 app.include_router(pages_router)
 

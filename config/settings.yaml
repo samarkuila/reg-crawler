@@ -1,6 +1,6 @@
 # Placeholder - populated in later prompts. Config is data; do not hard-code in code.
 crawler:
-  contact: "rizendigital@example.invalid"   # replace with the real contact before any live crawl
+  contact: "rizendigital@gmail.com"   # replace with the real contact before any live crawl
   # Block detection (CLAUDE.md rule 1): we only RECORD a block and stop; we never work around it.
   # Matched case-insensitively against the first 64 KB of an HTML/text response.
   block_markers:
@@ -26,4 +26,30 @@ crawler:
     - "/auth/"
     - "/account/login"
   block_status_codes: [403, 429]
+  # The first successful crawl of a source stores only a window of items; everything older on the
+  # page is recorded as "already seen" (fingerprint only). Later crawls use the `lookback-days`
+  # setting. A source can override mode / days / sorted_newest_first (Sources page, versioned).
+  first_run:
+    mode: current_month          # current_month | last_n_days | all
+    last_n_days: 30              # used when mode = last_n_days
+    min_lookback_days: 7         # current_month never reaches back fewer days than this
+    timezone: Asia/Kolkata
+    undated_max_items: 20        # sources with no dates: keep the newest N on the first crawl
+    baseline_items_in_review: true    # true = first-crawl items also appear in the Daily review queue
+  # Bulk add warns (never blocks) when a url's host is not one of these domains or one already in
+  # the source register. A domain here also covers its sub-domains.
+  allowed_hosts:
+    - rbi.org.in
+    - sebi.gov.in
+    - egazette.gov.in
+    - mca.gov.in
+    - fiu.gov.in
+    - finmin.nic.in
+    - irdai.gov.in
+    - pfrda.org.in
+    - meity.gov.in
+    - un.org
+    - treasury.gov
+    - gov.in
+    - nic.in
 users: []

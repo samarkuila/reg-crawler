@@ -30,6 +30,9 @@ from tests.conftest import BACKENDS, make_backend
 
 MUTATING = {
     "create_source",
+    "create_sources_batch",
+    "set_source_baseline",
+    "add_seen_fingerprints",
     "add_source_version",
     "approve_source_version",
     "reject_source_version",

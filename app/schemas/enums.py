@@ -15,6 +15,27 @@ class Priority(StrEnum):
     URGENT = "URGENT"
 
 
+class BaselineStatus(StrEnum):
+    NOT_BASELINED = "NOT_BASELINED"
+    BASELINED = "BASELINED"
+
+
+class ItemOrigin(StrEnum):
+    BASELINE = "BASELINE"  # stored by a source's first crawl (the window)
+    CRAWL = "CRAWL"  # found by a later crawl
+
+
+class SeenReason(StrEnum):
+    OUT_OF_WINDOW = "OUT_OF_WINDOW"
+    UNDATED_BEYOND_LIMIT = "UNDATED_BEYOND_LIMIT"
+
+
+class FirstRunMode(StrEnum):
+    CURRENT_MONTH = "current_month"
+    LAST_N_DAYS = "last_n_days"
+    ALL = "all"
+
+
 class VersionStatus(StrEnum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"

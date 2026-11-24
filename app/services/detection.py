@@ -7,6 +7,11 @@ only, never by the date a website shows (CLAUDE.md rule 6):
     fingerprint = sha256(source_id | normalised ref no.)   if there is a reference number
                 = sha256(source_id | canonical url)        otherwise
 
+First crawl of a source (NOT_BASELINED): only items inside the first-run window are stored
+(origin BASELINE); older rows are recorded as seen fingerprints only. The source is marked
+BASELINED only when that run was healthy. Later crawls (BASELINED) compare every row with the
+stored items and the seen fingerprints. See app/services/first_run.py.
+
 Change types (architecture §4):
   NEW        fingerprint never seen
   BACKDATED  never seen, and its displayed date is before the date of the last healthy run
@@ -21,6 +26,7 @@ import re
 import statistics
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -30,19 +36,24 @@ from app.schemas.entities import (
     ItemObservation,
     RawListingItem,
     RegulatoryItem,
+    SeenFingerprint,
     Source,
     SourceCheck,
     now_ist,
 )
 from app.schemas.enums import (
+    BaselineStatus,
     ChangeType,
     Channel,
     CheckChannel,
     CheckStatus,
+    ItemOrigin,
     ItemState,
     Priority,
+    SeenReason,
 )
 from app.services import relevance
+from app.services.first_run import FirstRunConfig, Window, load_first_run_config, window_for
 from app.services.normalise import html_to_text
 
 ACTOR = "detection"
@@ -63,10 +74,23 @@ def fingerprint(source_id: str, ref_no: str | None, canonical_url: str) -> str:
     return hashlib.sha256(f"{source_id}|{key}".encode()).hexdigest()
 
 
-def content_hash(row: RawListingItem) -> str:
-    """Hash of what a channel says about the item: title, reference number and any text."""
+def content_hash(row: RawListingItem, full: bool = True) -> str:
+    """Hash of what a channel says about the item.
+
+    The legacy hash (full=False) is title, reference number and any text. The full hash also
+    covers the link, the displayed date and the attachment list, so a change to any of them is a
+    MODIFIED item. Observations stored before this change hold the legacy hash, which still
+    counts as "unchanged", so an upgrade does not flag every existing item.
+    """
     text = html_to_text(str(row.raw_extra.get("description_html") or ""))
     parts = [re.sub(r"\s+", " ", row.title).strip(), normalise_ref_key(row.ref_no or ""), text]
+    if full:
+        attachments = sorted(str(a) for a in row.raw_extra.get("attachments") or [])
+        parts += [
+            row.url,
+            row.displayed_date.isoformat() if row.displayed_date else "",
+            *attachments,
+        ]
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
@@ -93,14 +117,25 @@ class DetectionResult:
     events: list[DetectedEvent] = field(default_factory=list)
     unchanged: int = 0
     warnings: list[SanityWarning] = field(default_factory=list)
+    baselined: list[str] = field(default_factory=list)  # sources marked BASELINED by this run
 
     def count(self, change: ChangeType) -> int:
         return sum(1 for e in self.events if e.change == change)
 
 
 class DetectionService:
-    def __init__(self, repo: Repository) -> None:
+    def __init__(
+        self,
+        repo: Repository,
+        first_run: FirstRunConfig | None = None,
+        today: Callable[[], date] | None = None,
+    ) -> None:
         self._repo = repo
+        self._first_run = first_run
+        self._today = today  # injectable for tests
+
+    def _config(self) -> FirstRunConfig:
+        return self._first_run or load_first_run_config()
 
     # --- one run -----------------------------------------------------------------------------
 
@@ -142,6 +177,30 @@ class DetectionService:
         for row in self._repo.list_raw_items(run.id, source.id):
             seen.setdefault(self._fp(source.id, row), {}).setdefault(row.channel, row)
 
+        baseline = source.baseline_status == BaselineStatus.NOT_BASELINED
+        window: Window | None = None
+        if baseline:
+            window = window_for(source, self._config(), self._today() if self._today else None)
+        known = {r.fingerprint for r in self._repo.list_seen_fingerprints(source.id)}
+        undated_left = self._config().undated_max_items
+        previous_raw = (
+            {self._fp(source.id, r): r for r in self._repo.list_raw_items(previous.id, source.id)}
+            if previous
+            else {}
+        )
+        counts = {
+            "rows_parsed": len(seen),
+            "new": 0,
+            "modified": 0,
+            "backdated": 0,
+            "reappeared": 0,
+            "unchanged": 0,
+            "known_older": 0,
+            "baseline_items": 0,
+            "seen_only": 0,  # first crawl: rows older than the window, kept as fingerprints
+        }
+        to_remember: list[SeenFingerprint] = []
+
         now = now_ist()
         unchanged: list[str] = []
         for fp, per_channel in seen.items():
@@ -150,8 +209,27 @@ class DetectionService:
             existing = self._repo.find_item_by_fingerprint(fp)
             hashes = {c: content_hash(r) for c, r in per_channel.items()}
 
+            if existing is None and fp in known:
+                counts["known_older"] += 1  # seen by the first crawl, older than its window
+                continue
+
             if existing is None:
-                change = self._new_or_backdated(row, previous)
+                origin, flags = ItemOrigin.CRAWL, []
+                if baseline:
+                    assert window is not None  # noqa: S101
+                    out = self._out_of_window(row, window)
+                    if out is None and row.displayed_date is None:
+                        if undated_left <= 0:
+                            out = SeenReason.UNDATED_BEYOND_LIMIT
+                        undated_left -= 1
+                    if out is not None:
+                        to_remember.append(self._seen_row(run, source, fp, row, now, out))
+                        counts["seen_only"] += 1
+                        known.add(fp)
+                        continue
+                    origin, change = ItemOrigin.BASELINE, ChangeType.NEW
+                else:
+                    change, flags = self._new_or_backdated(row, previous, source)
                 event = self._save_new(
                     run,
                     source,
@@ -163,15 +241,27 @@ class DetectionService:
                     per_channel,
                     both_channels_read,
                     now,
+                    origin,
+                    flags,
                 )
                 result.events.append(event)
+                if origin == ItemOrigin.BASELINE:
+                    counts["baseline_items"] += 1
+                else:
+                    counts["backdated" if change == ChangeType.BACKDATED else "new"] += 1
                 continue
 
             prior = self._prior_hashes(existing.id)
-            modified = any(c in prior and prior[c] != h for c, h in hashes.items())
+            modified = any(
+                c in prior and prior[c] != h and prior[c] != content_hash(per_channel[c], False)
+                for c, h in hashes.items()
+            )
             reappeared = previous is not None and fp not in previous_fps
             if modified or reappeared:
                 change = ChangeType.MODIFIED if modified else ChangeType.REAPPEARED
+                reason = (
+                    self._modified_reason(existing, row, previous_raw.get(fp)) if modified else None
+                )
                 event = self._save_existing(
                     run,
                     source,
@@ -184,8 +274,10 @@ class DetectionService:
                     prior,
                     both_channels_read,
                     now,
+                    reason,
                 )
                 result.events.append(event)
+                counts["modified" if modified else "reappeared"] += 1
                 continue
 
             # Nothing changed. If this run settles a channel mismatch, record that; else just
@@ -206,8 +298,85 @@ class DetectionService:
             else:
                 unchanged.append(existing.id)
             result.unchanged += 1
+            counts["unchanged"] += 1
         self._repo.mark_items_seen(unchanged, now, ACTOR)
+        if to_remember:
+            self._repo.add_seen_fingerprints(to_remember, ACTOR)
         result.warnings.extend(self._sanity(source, this_run, history))
+        self._finish_source(run, source, this_run, counts, window, baseline, result)
+
+    # --- first crawl: window and baseline ----------------------------------------------------
+
+    @staticmethod
+    def _out_of_window(row: RawListingItem, window: Window) -> SeenReason | None:
+        if row.displayed_date is not None and window.start and row.displayed_date < window.start:
+            return SeenReason.OUT_OF_WINDOW
+        return None
+
+    @staticmethod
+    def _seen_row(run, source, fp, row, now, reason) -> SeenFingerprint:  # type: ignore[no-untyped-def]
+        return SeenFingerprint(
+            id=f"seen-{uuid.uuid4().hex[:10]}",
+            source_id=source.id,
+            fingerprint=fp,
+            title=row.title,
+            published_date=row.displayed_date,
+            first_seen_run_id=run.id,
+            first_seen_at=now,
+            reason=reason,
+        )
+
+    def _finish_source(  # noqa: PLR0913
+        self,
+        run: CrawlRun,
+        source: Source,
+        this_run: list[SourceCheck],
+        counts: dict[str, int],
+        window: Window | None,
+        baseline: bool,
+        result: DetectionResult,
+    ) -> None:
+        """Write the run counters, and mark the source BASELINED only after a healthy first run."""
+        out_of_window = counts["seen_only"]
+        stats: dict = dict(counts)  # type: ignore[type-arg]
+        if baseline:  # on later crawls the crawler's own window_start (the lookback) stays
+            stats["window_start"] = window.start.isoformat() if window and window.start else None
+        problem: str | None = None
+        if baseline:
+            if any(c.status != CheckStatus.OK for c in this_run):
+                problem = "a channel was blocked, failed, empty or could not be read"
+            elif not counts["rows_parsed"]:
+                problem = "no rows were parsed"
+        fresh = [c for c in self._repo.list_source_checks(run.id) if c.source_id == source.id]
+        for check in fresh:  # re-read: the sanity step may have added a warning note
+            note = None
+            if baseline and problem:
+                note = f"Not baselined: {problem}; the next crawl applies the window again"
+            detail = check.error_detail
+            if note and (not detail or note not in detail):
+                detail = f"{detail}; {note}" if detail else note
+            merged = {**check.stats, **stats}
+            if merged != check.stats or detail != check.error_detail:  # re-running changes nothing
+                self._repo.record_source_check(
+                    check.model_copy(update={"stats": merged, "error_detail": detail}), ACTOR
+                )
+        if baseline and problem is None:
+            self._repo.set_source_baseline(
+                source.id,
+                BaselineStatus.BASELINED,
+                window.start if window else None,
+                ACTOR,
+                "BASELINE_COMPLETED",
+                {
+                    "run_id": run.id,
+                    "window_start": stats["window_start"],
+                    "mode": window.mode.value if window else None,
+                    "items_stored": counts["baseline_items"],
+                    "seen_only": out_of_window,
+                    "rows_parsed": counts["rows_parsed"],
+                },
+            )
+            result.baselined.append(source.id)
 
     # --- helpers -----------------------------------------------------------------------------
 
@@ -231,10 +400,34 @@ class DetectionService:
         return best
 
     @staticmethod
-    def _new_or_backdated(row: RawListingItem, previous: CrawlRun | None) -> ChangeType:
-        if previous and row.displayed_date and row.displayed_date < previous.cycle_date:
-            return ChangeType.BACKDATED
-        return ChangeType.NEW
+    def _new_or_backdated(
+        row: RawListingItem, previous: CrawlRun | None, source: Source
+    ) -> tuple[ChangeType, list[str]]:
+        """NEW, or BACKDATED when the date shown is older than the baseline window (the link is
+        new on the page although its date is old) or older than the last healthy run."""
+        day = row.displayed_date
+        if day and source.baseline_window_start and day < source.baseline_window_start:
+            return ChangeType.BACKDATED, ["old date, new on page"]
+        if previous and day and day < previous.cycle_date:
+            return ChangeType.BACKDATED, ["old date, new on page"]
+        return ChangeType.NEW, []
+
+    @staticmethod
+    def _modified_reason(
+        existing: RegulatoryItem, row: RawListingItem, before: RawListingItem | None
+    ) -> str:
+        reasons = []
+        if existing.title.strip() != row.title.strip():
+            reasons.append("title changed")
+        if row.displayed_date and existing.displayed_date != row.displayed_date:
+            reasons.append("date changed")
+        if before is not None:
+            added = set(row.raw_extra.get("attachments") or []) - set(
+                before.raw_extra.get("attachments") or []
+            )
+            if added:
+                reasons.append("attachment added")
+        return "; ".join(reasons) or "content changed"
 
     def _prior_hashes(self, item_id: str) -> dict[CheckChannel, str]:
         """The last known content hash on each channel (observations are in time order)."""
@@ -296,7 +489,19 @@ class DetectionService:
         ]
 
     def _save_new(
-        self, run, source, fp, row, channels, change, hashes, per_channel, both_read, now
+        self,
+        run,
+        source,
+        fp,
+        row,
+        channels,
+        change,
+        hashes,
+        per_channel,
+        both_read,
+        now,
+        origin=ItemOrigin.CRAWL,
+        flags=None,
     ) -> DetectedEvent:  # type: ignore[no-untyped-def]
         scored = self._score(source, row)
         item = RegulatoryItem(
@@ -318,6 +523,8 @@ class DetectionService:
             first_seen_at=now,
             last_seen_at=now,
             summary=row.raw_extra.get("summary"),
+            origin=origin,
+            flags=list(flags or []),
         )
         saved = self._repo.save_detection(
             item, self._observations(item.id, run, change, per_channel, hashes, {}), True, ACTOR
@@ -337,6 +544,7 @@ class DetectionService:
         prior,
         both_read,
         now,
+        reason=None,
     ) -> DetectedEvent:  # type: ignore[no-untyped-def]
         update: dict = {  # type: ignore[type-arg]
             "title": row.title,
@@ -352,6 +560,8 @@ class DetectionService:
             ),
             "summary": row.raw_extra.get("summary") or existing.summary,
         }
+        if reason:
+            update["summary"] = f"Changed: {reason}"
         if both_read:
             update["channel_mismatch"] = len(channels) == 1
         if change == ChangeType.MODIFIED:

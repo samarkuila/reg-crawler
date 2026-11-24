@@ -36,6 +36,11 @@ PAGES: dict[str, tuple[str, str, str]] = {
     ),
     "/settings": ("settings", "Settings", "Run times, routing, recipients, wording and keywords."),
     "/audit": ("audit", "Audit log", "Who did what, and when. Read only."),
+    "/database": (
+        "database",
+        "Database",
+        "Browse, edit and delete rows in any table, or reset. Admin only. Every change is audited.",
+    ),
 }
 
 
@@ -73,6 +78,7 @@ PAGE_TEMPLATES: dict[str, str] = {
     "sources": "pages/sources.html",
     "settings": "pages/settings.html",
     "audit": "pages/audit.html",
+    "database": "pages/database.html",
 }
 
 

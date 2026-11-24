@@ -15,9 +15,26 @@ DEFAULT_DATABASE_URL = "sqlite:///data/reg_monitor.db"
 BUSY_TIMEOUT_MS = 30_000
 
 
+ROOT = Path(__file__).resolve().parents[2]
+
+
 def database_url() -> str:
-    """DATABASE_URL from the environment (see .env.example), else the local SQLite file."""
-    return os.environ.get("DATABASE_URL", "").strip() or DEFAULT_DATABASE_URL
+    """DATABASE_URL from the environment (see .env.example), else the local SQLite file.
+
+    A relative SQLite path is taken from the repository root, not the current folder, so the app,
+    Alembic and the crawler (which runs inside crawler/) all open the same file.
+    """
+    return _absolute_sqlite(os.environ.get("DATABASE_URL", "").strip() or DEFAULT_DATABASE_URL)
+
+
+def _absolute_sqlite(url: str) -> str:
+    parsed = make_url(url)
+    name = parsed.database
+    if parsed.get_backend_name() != "sqlite" or name in (None, "", ":memory:"):
+        return url
+    if Path(name).expanduser().is_absolute():
+        return url
+    return f"sqlite:///{(ROOT / name).as_posix()}"
 
 
 def _is_sqlite(url: str) -> bool:
@@ -40,7 +57,7 @@ def _configure_sqlite(dbapi_connection: sqlite3.Connection, _record: Any) -> Non
 
 def make_engine(url: str | None = None, **kwargs: Any) -> Engine:
     """Engine for `url` (default: DATABASE_URL). Foreign keys are enforced on SQLite too."""
-    url = url or database_url()
+    url = _absolute_sqlite(url) if url else database_url()
     if _is_sqlite(url):
         ensure_sqlite_folder(url)
         engine = create_engine(url, **kwargs)

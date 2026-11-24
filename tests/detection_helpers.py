@@ -7,6 +7,7 @@ from datetime import date
 
 from app.schemas.entities import RawListingItem, SourceCheck, SourceVersion, now_ist
 from app.schemas.enums import (
+    BaselineStatus,
     CheckChannel,
     CheckStatus,
     Cycle,
@@ -30,6 +31,8 @@ def make_source(repo, source_id: str = "det-both", **updates):
         "exclude_keywords": [],
         "current_version": 1,
         "active": True,
+        # Legacy detection tests are about later crawls; the first-crawl window has its own tests.
+        "baseline_status": BaselineStatus.BASELINED,
         **updates,
     }
     source = template.model_copy(update=fields)

@@ -23,6 +23,7 @@ Policies marked **[HARD]** cannot be waived inside the project. Changing one nee
 | W5 | Frequency: scheduled runs only (2/day + hourly for URGENT sources); "Run now" is rate-limited (1 per source per 10 min). |
 | W6 | Prefer official machine channels in this order: data file/API → RSS → HTML listing → JS rendering → email alert → manual. |
 | W7 | Blocked = record BLOCKED, notify, manual-fetch path. Never treat a blocked source as "no updates". |
+| W9 | First crawl and baseline: a source's first successful crawl stores only the configured window (default: the current month, never less than 7 days) as items; every older row is recorded as an "already seen" fingerprint and counted in the run log, never dropped silently. A source is marked baselined only after a healthy run (never after Blocked, Failed or zero items). At most 50 page requests go to one website in one run. |
 | W8 | Terms of use: check each site's terms; Legal confirms use of UN consolidated list data for internal screening. |
 
 ## 3. AI / agent policy (Luna)
@@ -82,3 +83,5 @@ Policies marked **[HARD]** cannot be waived inside the project. Changing one nee
 
 ## 9. Policy exceptions
 Record any exception in `docs/project-status.md` → *Decisions & exceptions* with: policy ID, reason, approver, expiry date.
+
+**Database admin (added 23.11.2026, owner request).** The admin Database page lets an admin edit and delete rows directly, which bypasses the second-person approval of rule 9 for that data. Kept in place: D1 (write-once tables stay browse only and the DB triggers still apply), every change and reset is an audit event, admin role only, SQL backend only, off in prod unless `DB_ADMIN_ENABLED=true`. Needs Compliance/IT sign-off before use outside the POC.

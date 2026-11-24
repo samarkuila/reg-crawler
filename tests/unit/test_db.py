@@ -75,11 +75,22 @@ ARCHITECTURE = {
 }
 # "Additions made in M1" (architecture section 4), which the SQL models must carry.
 M1_ADDITIONS = {
-    "source": {"planned", "position"},
+    "source": {
+        "planned",
+        "position",
+        "retired",
+        "first_run_mode",
+        "first_run_days",
+        "sorted_newest_first",
+        "baseline_status",
+        "baseline_at",
+        "baseline_window_start",
+    },
     "source_version": {"decided_at", "reject_reason"},
-    "regulatory_item": {"summary"},
+    "regulatory_item": {"summary", "origin", "flags"},
     "document": {"filename", "needs_ocr"},
     "crawl_run": {"sources"},
+    "source_check": {"stats"},
     "review_decision": {"is_draft"},
     "daily_update": {"prepared_by", "exported_at"},
 }
@@ -93,8 +104,13 @@ CONFIG_TABLES = {
 }
 # raw_listing_item: Prompt 9; alert: Prompt 13
 EXTRA_TABLES = {
-    "internal_ref_counter", "raw_listing_item", "alert",
-    "ai_extraction", "agent_flag", "agent_run",
+    "seen_fingerprint",
+    "internal_ref_counter",
+    "raw_listing_item",
+    "alert",
+    "ai_extraction",
+    "agent_flag",
+    "agent_run",
 }
 
 
@@ -471,3 +487,15 @@ def test_db_layer_does_not_depend_on_services_or_api() -> None:
 
 def test_utc_helper_is_timezone_aware() -> None:
     assert datetime.now(UTC).tzinfo is not None
+
+
+def test_relative_sqlite_path_is_taken_from_the_repository_root(monkeypatch, tmp_path):
+    """The crawler runs inside crawler/; a relative DATABASE_URL must still mean <root>/data/..."""
+    from app.db.session import ROOT, database_url
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///data/reg_monitor.db")
+    monkeypatch.chdir(tmp_path)
+    assert database_url() == f"sqlite:///{(ROOT / 'data' / 'reg_monitor.db').as_posix()}"
+    absolute = f"sqlite:///{(tmp_path / 'x.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", absolute)
+    assert database_url() == absolute

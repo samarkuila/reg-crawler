@@ -122,8 +122,10 @@ class DocumentService:
             if description:
                 self._store(event, event.row.url, description.encode("utf-8"), "text/html",
                             "feed-description.html", report)  # fmt: skip
-            elif event.row.url:
+            elif event.row.url.lower().startswith(("http://", "https://")):
                 to_download.setdefault(source.id, []).append(event)
+            else:
+                report.skipped += 1  # not a web address (for example a javascript: menu link)
         for source_id, group in to_download.items():
             source = self._repo.get_source(source_id)
             assert source is not None

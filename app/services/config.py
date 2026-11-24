@@ -11,6 +11,8 @@ from typing import Any
 
 from app.repositories.base import Repository
 from app.schemas.api import (
+    BulkDecisionItem,
+    BulkDecisionResult,
     FieldChange,
     SettingView,
     SmeFunctionOption,
@@ -20,7 +22,7 @@ from app.schemas.api import (
     SourceView,
 )
 from app.schemas.entities import AppUser, Setting, Source, SourceVersion, now_ist
-from app.schemas.enums import SourceType, VersionStatus
+from app.schemas.enums import BaselineStatus, SourceType, VersionStatus
 from app.services import readable
 from app.services.errors import ConflictError, InvalidError, NotFoundError
 from app.services.permissions import (
@@ -29,6 +31,7 @@ from app.services.permissions import (
     require_different_person,
     require_role,
 )
+from app.services.source_bulk import HostGate, decide_many
 from app.services.source_test import MockSourceTester, SourceTester
 
 _HOW = {
@@ -58,6 +61,11 @@ _TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
 
+# An RSS feed or an HTML listing is read without a browser, so requires_js is always false for them.
+# Only the "Browser-rendered page" way of reading may need one. (Playwright stays off.)
+_READ_WITHOUT_BROWSER = frozenset({SourceType.RSS, SourceType.HTML_LIST})
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
 
@@ -75,6 +83,7 @@ class ConfigService:
     def __init__(self, repo: Repository, tester: SourceTester | None = None) -> None:
         self._repo = repo
         self._tester: SourceTester = tester or MockSourceTester()
+        self._gate = HostGate()  # politeness for "Test selected"
         # Called with the setting key after a change is approved (the scheduler reloads on it).
         self.on_setting_approved: Callable[[str], None] | None = None
 
@@ -142,7 +151,8 @@ class ConfigService:
 
     def list_sources(self, user: AppUser) -> list[SourceView]:
         sources = sorted(
-            self._repo.list_sources(), key=lambda s: (not s.active, s.planned, s.authority.lower())
+            (s for s in self._repo.list_sources() if not s.retired),
+            key=lambda s: (not s.active, s.planned, s.authority.lower()),
         )
         return [self._view(s, user) for s in sources]
 
@@ -165,6 +175,8 @@ class ConfigService:
         for key in ("include_keywords", "exclude_keywords"):
             if key in out:
                 out[key] = _clean_list(out[key], "Keywords")
+        if out.get("first_run_days") is not None and not 1 <= int(out["first_run_days"]) <= 3650:
+            raise InvalidError("first_run_days must be between 1 and 3650.")
         cfg = out.get("adapter_config")
         if cfg is not None:
             if not isinstance(cfg, dict):
@@ -184,6 +196,9 @@ class ConfigService:
                         raise InvalidError(
                             f"The reference no. pattern is not valid: {exc}"
                         ) from exc
+            flag = cfg.get("date_from_header_row")
+            if flag is not None and not isinstance(flag, bool):
+                raise InvalidError("date_from_header_row must be true or false.")
             fmt = cfg.get("date_format")
             if fmt:
                 if "%" not in fmt:
@@ -197,11 +212,20 @@ class ConfigService:
     def create_source(self, user: AppUser, body: SourceCreate) -> SourceView:
         require_role(user, CONFIG_ROLES, "add a source")
         fields = self._check_source_fields(body.model_dump(mode="json", exclude={"id"}))
+        if SourceType(fields["type"]) in _READ_WITHOUT_BROWSER:
+            fields["requires_js"] = False
         source_id = body.id or _slug(f"{fields['authority']}-{fields['page_name']}")
         if not re.match(r"^[a-z0-9][a-z0-9-]{1,60}$", source_id):
             raise InvalidError("Could not make an id from the authority and page name.")
-        if self._repo.get_source(source_id) is not None:
+        existing = self._repo.get_source(source_id)
+        if existing is not None and not (existing.retired and body.id is None):
             raise ConflictError(f"A source with id '{source_id}' already exists.")
+        if existing is not None:  # a deleted source keeps its id for history; the new one gets -2
+            taken = {s.id for s in self._repo.list_sources()}
+            number = 2
+            while f"{source_id}-{number}" in taken:
+                number += 1
+            source_id = f"{source_id}-{number}"
         source = Source(
             id=source_id,
             active=False,
@@ -220,6 +244,26 @@ class ConfigService:
         )
         return self._view(self._repo.create_source(source, version, user.name), user)
 
+    def rebaseline(self, user: AppUser, source_id: str) -> SourceView:
+        """Make the next crawl of this source apply the first-run window again.
+
+        Nothing is deleted. Items and "already seen" fingerprints stay, and the next crawl skips
+        every fingerprint it already knows, so it creates no duplicates. Approver only.
+        """
+        require_role(user, APPROVER_ROLES, "re-baseline a source")
+        source = self._source(source_id)
+        if source.baseline_status == BaselineStatus.NOT_BASELINED:
+            raise ConflictError("This source is not baselined yet; its next crawl is the first.")
+        self._repo.set_source_baseline(
+            source_id,
+            BaselineStatus.NOT_BASELINED,
+            None,
+            user.name,
+            "REBASELINE_REQUESTED",
+            {"previous_window_start": str(source.baseline_window_start or "")},
+        )
+        return self._view(self._source(source_id), user)
+
     def list_versions(self, source_id: str) -> list[SourceVersion]:
         self._source(source_id)
         return self._repo.list_source_versions(source_id)
@@ -236,10 +280,27 @@ class ConfigService:
             )
         after = self._check_source_fields(changes.model_dump(mode="json", exclude_unset=True))
         current = source.model_dump(mode="json")
+        if SourceType(after.get("type", source.type)) in _READ_WITHOUT_BROWSER:
+            after["requires_js"] = False  # also clears a flag left over from an earlier version
         after = {k: v for k, v in after.items() if current.get(k) != v}
         if not after:
             raise InvalidError("Nothing would change. Edit at least one field.")
         return self._repo.add_source_version(source_id, after, user.name)
+
+    def delete_source(self, user: AppUser, source_id: str) -> SourceVersion:
+        """Propose removing a source. A different approver must approve; history is kept."""
+        require_role(user, CONFIG_ROLES, "delete a source")
+        source = self._source(source_id)
+        if source.retired:
+            raise ConflictError("This source is already deleted.")
+        if self._pending_version(source_id) is not None:
+            raise ConflictError(
+                "A change to this source is already waiting for approval. "
+                "Approve or reject it before deleting the source."
+            )
+        return self._repo.add_source_version(
+            source_id, {"retired": True, "active": False}, user.name
+        )
 
     def _pending(self, source_id: str, version: int) -> SourceVersion:
         self._source(source_id)
@@ -268,7 +329,9 @@ class ConfigService:
             source_id, version, user.name, reason.strip(), user.name
         )
 
-    def test_source(self, user: AppUser, source_id: str) -> SourceTestResult:
+    def test_source(
+        self, user: AppUser, source_id: str, *, polite: bool = False
+    ) -> SourceTestResult:
         """Dry run: read one page with the source's reading rules and return the parsed rows.
 
         If a change is waiting for approval, the test uses the proposed rules, so they can be
@@ -280,7 +343,24 @@ class ConfigService:
         if pending is not None:
             changes = {k: v for k, v in pending.after.items() if k in Source.model_fields}
             source = Source.model_validate({**source.model_dump(), **changes})
+        if polite:  # "Test selected": one request per host, >= 2 s apart, circuit breaker
+            return self._gate.run(source, self._tester.run)
         return self._tester.run(source)
+
+    def approve_many(
+        self, user: AppUser, items: list[BulkDecisionItem]
+    ) -> list[BulkDecisionResult]:
+        """Approve each chosen version on its own (own checks, own audit event)."""
+        require_role(user, APPROVER_ROLES, "approve a source change")
+        return decide_many(items, lambda sid, ver: self.approve_version(user, sid, ver))
+
+    def reject_many(
+        self, user: AppUser, items: list[BulkDecisionItem], reason: str
+    ) -> list[BulkDecisionResult]:
+        require_role(user, APPROVER_ROLES, "reject a source change")
+        if not reason.strip():
+            raise InvalidError("A reason is required to reject a change.")
+        return decide_many(items, lambda sid, ver: self.reject_version(user, sid, ver, reason))
 
     # --- settings ----------------------------------------------------------------------------
 

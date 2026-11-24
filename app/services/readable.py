@@ -15,6 +15,7 @@ LABELS = {
     "url": "Page URL",
     "rss_url": "RSS URL",
     "priority": "Priority",
+    "retired": "Delete this source",
     "requires_js": "Needs a browser to render",
     "active": "Active",
     "include_keywords": "Include keywords",
@@ -124,3 +125,44 @@ def key_values(value: Any) -> list[KeyValue]:
     if not isinstance(value, dict):
         return [KeyValue(key="Value", value=text(value))]
     return [KeyValue(key=label(k), value=text(v)) for k, v in _flat(value).items()]
+
+
+# --- plain language for crawl errors (shown to reviewers; the raw text stays in the log) -------
+
+_PLAIN_RULES: list[tuple[str, str]] = [
+    # the note about the first-run window is shown on its own, not in every message
+    (r";?\s*Not baselined:.*?window again\.?", ""),
+    (
+        r"javascript:\S*: download failed \(Not downloaded\)",
+        "A menu link that is not a document was skipped.",
+    ),
+    (
+        r"DownloadTimeoutError: Getting \S+ took longer than ([\d.]+) seconds\.?",
+        r"The website did not answer within \1 seconds.",
+    ),
+    (
+        r"Forbidden by robots\.txt",
+        "The website's robots.txt does not allow automated reading. Nothing was bypassed; "
+        "check the page by hand",
+    ),
+    (
+        r"DownloadFailedError: \[?<twisted[^>]*ConnectionLost[^>]*>\]?",
+        "The connection to the website was lost",
+    ),
+    (r"HTTP 404", "Page not found (HTTP 404); the address may have changed"),
+    (r"HTTP 403: access refused by the website", "The website refused access (HTTP 403)"),
+    (r"; Warning: [^;]*returned no items", ""),
+]
+
+
+def plain_error(text: str | None) -> str | None:
+    """A crawl error in plain words. Unknown text is kept as it is."""
+    import re
+
+    if not text:
+        return text
+    out = text
+    for pattern, replacement in _PLAIN_RULES:
+        out = re.sub(pattern, replacement, out)
+    out = re.sub(r"\s+", " ", out).strip(" ;.")
+    return (out + ".") if out and not out.endswith((".", "?", "!")) else out

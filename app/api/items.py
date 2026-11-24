@@ -12,7 +12,7 @@ from app.schemas.api import (
     ItemListResponse,
 )
 from app.schemas.entities import AppUser, Document
-from app.schemas.enums import Channel, ItemState
+from app.schemas.enums import Channel, ItemOrigin, ItemState
 from app.services import Services
 from app.services.review import MAX_UPLOAD_BYTES
 
@@ -26,9 +26,14 @@ def list_items(
     channel: Channel | None = None,
     q: str | None = Query(None, max_length=200, description="Search title, reference, authority"),
     min_relevance: int | None = Query(None, ge=0, le=100),
+    origin: ItemOrigin | None = Query(
+        None,
+        description="BASELINE = stored by a first crawl, CRAWL = found later. "
+        "Without it, baseline items are left out of the queue (see settings.yaml first_run).",
+    ),
     services: Services = Depends(get_services),
 ) -> ItemListResponse:
-    return services.review.list_items(cycle, state, channel, q, min_relevance)
+    return services.review.list_items(cycle, state, channel, q, min_relevance, origin)
 
 
 @router.post(

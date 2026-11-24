@@ -28,6 +28,9 @@ def make_source_tester() -> SourceTester:
     return MockSourceTester()
 
 
+from app.services.robots import make_robots_check  # noqa: E402
+
+
 def make_crawl_runner(repo) -> CrawlRunner:  # type: ignore[no-untyped-def]
     """CRAWL_RUNNER=live runs the real crawler; demo refuses (the demo data cannot be crawled).
 
@@ -40,6 +43,7 @@ def make_crawl_runner(repo) -> CrawlRunner:  # type: ignore[no-untyped-def]
             SubprocessLauncher(),
             DocumentService(repo, SubprocessDocumentFetcher()),
             agent=make_agent_orchestrator(repo),
+            robots_factory=make_robots_check,
         )
     return CrawlRunner(
         repo,

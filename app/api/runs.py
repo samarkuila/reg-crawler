@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from app.api.deps import current_user, get_services
 from app.schemas.api import (
     CrawlRunIn,
+    CrawlStatus,
     ManualCheckIn,
     RunDetail,
     SourceHealthSummary,
@@ -43,6 +44,15 @@ def start_crawl(
 ) -> CrawlRun:
     """Starts the run in the background and returns it at once; follow it with GET /runs/{id}."""
     return services.crawl.start_for(user, body.source_id if body else None)
+
+
+@router.get(
+    "/crawl/status",
+    response_model=CrawlStatus,
+    summary="Is a crawl running right now? Progress, current page and step",
+)
+def crawl_status(services: Services = Depends(get_services)) -> CrawlStatus:
+    return services.crawl.status()
 
 
 @router.get(

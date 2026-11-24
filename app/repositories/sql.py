@@ -50,6 +50,7 @@ from app.schemas.entities import (
     Recipient,
     RegulatoryItem,
     ReviewDecision,
+    SeenFingerprint,
     Setting,
     SettingChange,
     SmeFunction,
@@ -59,7 +60,15 @@ from app.schemas.entities import (
     SourceVersion,
     now_ist,
 )
-from app.schemas.enums import Cycle, FlagStatus, ItemState, RunStatus, UpdateStatus, VersionStatus
+from app.schemas.enums import (
+    BaselineStatus,
+    Cycle,
+    FlagStatus,
+    ItemState,
+    RunStatus,
+    UpdateStatus,
+    VersionStatus,
+)
 
 _ENTITY_TO_MODEL: dict[type[BaseModel], type[m.Base]] = {
     AppUser: m.AppUser,
@@ -126,6 +135,11 @@ class SqlRepository:
         self._engine = engine
         self._factory: sessionmaker[Session] = make_session_factory(engine)
         self._root = Path(files_root or os.environ.get("FILES_ROOT") or ".").resolve()
+
+    @property
+    def engine(self) -> Engine:
+        """The engine, for the admin Database page (app/repositories/db_admin.py)."""
+        return self._engine
 
     # --- internals ---------------------------------------------------------------------------
 
@@ -280,6 +294,115 @@ class SqlRepository:
                 _dump(version),
             )
             return source.model_copy(deep=True)
+
+    def create_sources_batch(
+        self, entries: list[tuple[Source, SourceVersion]], actor: str, batch: dict[str, Any]
+    ) -> list[Source]:
+        with self._tx() as session:
+            position = session.scalar(select(func.max(m.Source.position))) or 0
+            out = []
+            for source, version in entries:
+                if session.get(m.Source, source.id) is not None:
+                    raise ValueError(f"Source {source.id} already exists")
+                position += 1
+                session.add(_to_row(m.Source, source, position=position))
+                session.add(_to_row(m.SourceVersion, version))
+                self._audit(
+                    session, actor, "source.created", "source", source.id, None, _dump(source)
+                )
+                self._audit(
+                    session,
+                    actor,
+                    "source_version.requested",
+                    "source_version",
+                    version.id,
+                    None,
+                    _dump(version),
+                )
+                out.append(source.model_copy(deep=True))
+            self._audit(
+                session,
+                actor,
+                "source_import.batch",
+                "source_import",
+                batch["batch_id"],
+                {"rows_in_file": batch["rows_in_file"]},
+                batch,
+            )
+            return out
+
+    def set_source_baseline(
+        self,
+        source_id: str,
+        status: BaselineStatus,
+        window_start: date | None,
+        actor: str,
+        action: str,
+        detail: dict[str, Any],
+    ) -> Source:
+        with self._tx() as session:
+            row = session.get(m.Source, source_id)
+            if row is None:
+                raise KeyError(source_id)
+            before = _dump(_to_entity(Source, row))
+            done = status == BaselineStatus.BASELINED
+            row.baseline_status = status
+            row.baseline_at = now_ist() if done else None
+            row.baseline_window_start = window_start if done else None
+            session.flush()
+            after = _to_entity(Source, row)
+            self._audit(
+                session,
+                actor,
+                action,
+                "source",
+                source_id,
+                {**before, "detail": None},
+                {**_dump(after), "detail": detail},
+            )
+            return after
+
+    def add_seen_fingerprints(
+        self, rows: list[SeenFingerprint], actor: str
+    ) -> list[SeenFingerprint]:
+        if not rows:
+            return []
+        with self._tx() as session:
+            known = {
+                (sid, fp)
+                for sid, fp in session.execute(
+                    select(m.SeenFingerprint.source_id, m.SeenFingerprint.fingerprint).where(
+                        m.SeenFingerprint.source_id.in_({r.source_id for r in rows})
+                    )
+                )
+            }
+            added = []
+            for row in rows:
+                if (row.source_id, row.fingerprint) in known:
+                    continue
+                known.add((row.source_id, row.fingerprint))
+                session.add(_to_row(m.SeenFingerprint, row))
+                added.append(row)
+            if added:
+                self._audit(
+                    session,
+                    actor,
+                    "seen_fingerprints.recorded",
+                    "source",
+                    added[0].source_id,
+                    None,
+                    {"count": len(added), "run_id": added[0].first_seen_run_id},
+                )
+            return [r.model_copy(deep=True) for r in added]
+
+    def list_seen_fingerprints(self, source_id: str) -> list[SeenFingerprint]:
+        with self._tx() as session:
+            rows = session.scalars(
+                select(m.SeenFingerprint)
+                .where(m.SeenFingerprint.source_id == source_id)
+                .order_by(m.SeenFingerprint.first_seen_at, m.SeenFingerprint.id)
+            )
+            return [_to_entity(SeenFingerprint, r) for r in rows]
 
     def list_source_versions(self, source_id: str) -> list[SourceVersion]:
         with self._tx() as session:
@@ -712,6 +835,10 @@ class SqlRepository:
                 stmt = stmt.where(m.RegulatoryItem.channel == f.channel)
             if f.min_relevance is not None:
                 stmt = stmt.where(m.RegulatoryItem.relevance_score >= f.min_relevance)
+            if f.origin is not None:
+                stmt = stmt.where(m.RegulatoryItem.origin == f.origin)
+            if f.exclude_origin is not None:
+                stmt = stmt.where(m.RegulatoryItem.origin != f.exclude_origin)
             items = [_to_entity(RegulatoryItem, r) for r in session.scalars(stmt)]
             if f.q:
                 # Matched in Python so lower-casing and substring rules are identical on every

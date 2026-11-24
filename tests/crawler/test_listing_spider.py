@@ -11,7 +11,7 @@ from datetime import date
 import pytest
 from scrapy.http import HtmlResponse, Request
 
-from app.schemas.enums import CheckChannel, CheckStatus
+from app.schemas.enums import CheckChannel, CheckStatus, SourceType
 from regcrawler.pipelines import DbPipeline
 from regcrawler.spiders.listing import ListingConfig, ListingConfigError, ListingSpider
 from tests.crawler.conftest import (
@@ -228,6 +228,154 @@ def test_max_pages_without_a_next_selector_reads_one_page_and_says_so(make, repo
     assert "no 'next' selector" in check_of(repo, spider).error_detail
 
 
+# --- lookback_days: spiders accept it and listing spiders do not page past the window -----------
+
+
+def live(spider, today: date, lookback: int | None = None) -> None:
+    """Make the spider behave like a live run on a pinned day."""
+    spider.fixture = None
+    spider.today = lambda: today
+    if lookback is not None:
+        spider.lookback_days = lookback
+
+
+def next_requests(spider, name: str = "table_listing.html") -> list:
+    return [o for o in spider.parse(page(name)) if isinstance(o, Request)]
+
+
+def test_lookback_days_defaults_to_seven_and_is_accepted(repo) -> None:
+    assert make_spider(ListingSpider, repo, "trai").lookback_days == 7
+    assert make_spider(ListingSpider, repo, "trai", lookback_days="3").lookback_days == 3
+    assert make_spider(ListingSpider, repo, "trai", lookback_days=14).lookback_days == 14
+
+
+@pytest.mark.parametrize("bad", ["abc", "0", "-2"])
+def test_a_bad_lookback_days_is_refused(repo, bad) -> None:
+    with pytest.raises(ValueError, match="lookback_days"):
+        make_spider(ListingSpider, repo, "trai", lookback_days=bad)
+
+
+def test_window_start_counts_today_as_day_one(repo) -> None:
+    spider = make_spider(ListingSpider, repo, "trai", lookback_days=7)
+    spider.today = lambda: date(2026, 11, 24)
+    assert spider.window_start == date(2026, 11, 18)
+
+
+def test_paging_continues_while_the_page_is_inside_the_window(make) -> None:
+    spider, _ = make(paging(5, next="a.next"))
+    live(spider, date(2026, 11, 24), 7)  # window starts 18.11.2026; page is 18-20.11
+    assert len(next_requests(spider)) == 1
+
+
+def test_paging_stops_when_the_whole_page_is_older_than_the_window(make, repo) -> None:
+    spider, crawler = make(paging(5, next="a.next"))
+    live(spider, date(2026, 12, 24), 7)  # window starts 18.12.2026; every row is older
+    out = list(spider.parse(page("table_listing.html")))
+    assert not [o for o in out if isinstance(o, Request)]
+    assert len([o for o in out if o.__class__.__name__ == "ListingItem"]) == 3  # rows are kept
+    assert spider.stopped_by_window and spider.pages_read == 1
+
+
+def test_a_page_with_one_row_inside_the_window_keeps_paging(make) -> None:
+    spider, _ = make(paging(5, next="a.next"))
+    live(spider, date(2026, 11, 28), 9)  # window starts 20.11.2026; only the newest row is in
+    assert len(next_requests(spider)) == 1
+
+
+def test_a_page_without_readable_dates_does_not_stop_paging(make) -> None:
+    cfg = paging(5, next="a.next")
+    cfg["date_format"] = "%Y/%m/%d"  # does not match the page, so no date can be read
+    spider, _ = make(cfg)
+    live(spider, date(2030, 1, 1), 7)
+    assert len(next_requests(spider)) == 1
+
+
+def test_max_pages_stays_the_hard_cap_inside_the_window(make) -> None:
+    spider, _ = make(paging(1, next="a.next"))
+    live(spider, date(2026, 11, 24), 30)
+    assert not next_requests(spider)
+
+
+# --- date and section headings between the rows (date_from_header_row) -----------------------
+
+HEADINGS = {
+    "selectors": {"row": "tr.item", "title": "td a", "link": "td a", "header_row": "tr.head"},
+    "date_format": "%b %d, %Y",
+    "date_from_header_row": True,
+}
+
+
+def html(body: bytes) -> HtmlResponse:
+    return HtmlResponse(URL, body=body, encoding="utf-8", request=Request(URL))
+
+
+def test_heading_rows_give_each_item_its_date_and_section(make, repo) -> None:
+    spider, crawler = make(HEADINGS)
+    items = crawl(spider, page("master_directions_sections.html"), crawler)
+    banks, nbfc = "Commercial Banks", "Non-Banking Financial Companies"
+    assert [(i["displayed_date"], i["raw_extra"]["category"]) for i in items] == [
+        (date(2026, 4, 30), banks),
+        (date(2026, 4, 30), banks),
+        (date(2026, 4, 2), banks),
+        (date(2026, 4, 30), nbfc),  # the same date again in the next section
+        (date(2026, 6, 18), nbfc),  # newer than the section before: no global order assumed
+        (date(2026, 6, 18), nbfc),
+    ]
+    assert check_of(repo, spider).items_found == 6  # headings are not items
+
+
+def test_a_heading_that_does_not_parse_is_a_section_not_a_date(make) -> None:
+    spider, crawler = make(HEADINGS)
+    crawl(spider, page("master_directions_sections.html"), crawler)
+    assert spider.category == "Non-Banking Financial Companies"  # the latest label
+    assert spider.header_date == "Jun 18, 2026"  # the latest date, as shown
+
+
+def test_a_date_the_row_shows_wins_over_the_heading(make) -> None:
+    adapter = {**HEADINGS, "selectors": {**HEADINGS["selectors"], "date": "td.when"}}
+    spider, crawler = make(adapter)
+    body = (
+        b"<table><tr class='head'><td>Jan 05, 2026</td></tr>"
+        b"<tr class='item'><td><a href='/a'>Own</a></td><td class='when'>Feb 01, 2026</td></tr>"
+        b"<tr class='item'><td><a href='/b'>Head</a></td><td class='when'></td></tr></table>"
+    )
+    first, second = crawl(spider, html(body), crawler)
+    assert (first["displayed_date"], second["displayed_date"]) == (
+        date(2026, 2, 1),
+        date(2026, 1, 5),
+    )
+
+
+def test_rows_before_any_date_heading_are_kept_and_reported(make, repo) -> None:
+    spider, crawler = make(HEADINGS)
+    body = b"<table><tr class='item'><td><a href='/a'>Early row</a></td></tr></table>"
+    items = crawl(spider, html(body), crawler)
+    assert len(items) == 1 and items[0]["displayed_date"] is None
+    assert "category" not in items[0]["raw_extra"]
+    assert "before any date heading" in check_of(repo, spider).error_detail
+
+
+def test_without_the_option_heading_rows_change_nothing(make) -> None:
+    plain = {k: v for k, v in HEADINGS.items() if k != "date_from_header_row"}
+    spider, crawler = make(plain)
+    items = crawl(spider, page("master_directions_sections.html"), crawler)
+    assert [i["displayed_date"] for i in items] == [None] * 6
+    assert all("category" not in i["raw_extra"] for i in items)
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"selectors": {"row": "tr.item", "title": "td a"}}, "header_row selector"),
+        ({"date_format": ""}, "needs date_format"),
+        ({"selectors": {"row": "tr.item", "title": "td a", "header_row": "TODO"}}, "placeholder"),
+    ],
+)
+def test_date_from_header_row_needs_its_selector_and_date_format(change, message) -> None:
+    with pytest.raises(ListingConfigError, match=message):
+        ListingConfig({**HEADINGS, **change})
+
+
 # --- requests ----------------------------------------------------------------------------------
 
 
@@ -239,15 +387,24 @@ def test_the_listing_url_is_requested(make) -> None:
 
 
 def test_a_source_that_needs_a_browser_fails_clearly_when_there_is_none(make, repo) -> None:
-    spider, crawler = make(TABLE, requires_js=True)
+    spider, crawler = make(TABLE, type=SourceType.BROWSER, requires_js=True)
     assert start_requests(spider) == []  # scrapy-playwright is not installed or enabled
     DbPipeline(crawler, repo).close_spider()
     check = check_of(repo, spider)
     assert check.status == CheckStatus.FAILED and "requires_js" in check.error_detail
 
 
+@pytest.mark.parametrize("kind", [SourceType.RSS, SourceType.HTML_LIST])
+def test_an_rss_or_html_listing_source_never_waits_for_a_browser(make, kind) -> None:
+    """A stale requires_js=true stored by an old version must not block these sources."""
+    spider, _ = make(TABLE, type=kind, requires_js=True)
+    (request,) = start_requests(spider)
+    assert request.url == spider.source.url
+    assert "playwright" not in request.meta
+
+
 def test_a_browser_request_has_no_evasion_options(make, monkeypatch) -> None:
-    spider, _ = make(TABLE, requires_js=True)
+    spider, _ = make(TABLE, type=SourceType.BROWSER, requires_js=True)
     monkeypatch.setattr(ListingSpider, "_playwright_ready", staticmethod(lambda: True))
     (request,) = start_requests(spider)
     assert request.meta["playwright"] is True
@@ -339,3 +496,65 @@ def test_the_subprocess_tester_runs_the_real_spider_on_a_saved_page(tmp_path) ->
     assert [r.ref_no for r in result.rows][0] == "RBI/2026-27/45"
     assert len(result.rows) == 3 and result.saved is False
     assert "Nothing was saved" in result.message
+
+
+# --- first crawl window: paging stops at the window, request cap -------------------------------
+
+OLD_PAGE = {**HEADINGS, "selectors": {**HEADINGS["selectors"], "next": "a.next"}, "max_pages": 5}
+
+
+def first_run(spider, window: date | None, today: date = date(2026, 11, 24)) -> None:
+    live(spider, today)
+    spider.first_run = True
+    spider.first_run_window = window
+
+
+def test_the_first_crawl_stops_paging_after_a_page_that_is_all_older_than_the_window(make) -> None:
+    spider, _ = make(OLD_PAGE)
+    first_run(spider, date(2026, 11, 1))
+    out = list(spider.parse(page("rbi_old_page.html")))
+    assert not [o for o in out if isinstance(o, Request)]  # an "all old" page: no further page
+    assert len([o for o in out if o.__class__.__name__ == "ListingItem"]) == 2  # rows are kept
+    assert spider.stopped_by_window and spider.pages_read == 1
+
+
+def test_the_first_crawl_keeps_paging_while_the_page_reaches_into_the_window(make) -> None:
+    spider, _ = make(OLD_PAGE)
+    first_run(spider, date(2026, 11, 1))
+    out = list(spider.parse(page("rbi_monthly_headings.html")))  # newest rows are in the window
+    assert len([o for o in out if isinstance(o, Request)]) == 1
+
+
+def test_a_page_not_sorted_newest_first_is_read_up_to_max_pages(make) -> None:
+    spider, _ = make(OLD_PAGE, sorted_newest_first=False)
+    first_run(spider, date(2026, 11, 1))
+    out = list(spider.parse(page("rbi_old_page.html")))
+    assert len([o for o in out if isinstance(o, Request)]) == 1  # no early stop without order
+    assert not spider.stopped_by_window
+
+
+def test_mode_all_has_no_window_so_paging_is_not_cut_short(make) -> None:
+    spider, _ = make(OLD_PAGE)
+    first_run(spider, None)
+    assert len([o for o in spider.parse(page("rbi_old_page.html")) if isinstance(o, Request)]) == 1
+
+
+def test_the_request_cap_is_never_exceeded(make) -> None:
+    spider, crawler = make({**OLD_PAGE, "max_pages": 100})
+    first_run(spider, None)
+    spider.request_cap = 2
+    spider.requests_made = 1  # the first page request
+    out = list(spider.parse(page("rbi_old_page.html")))
+    assert len([o for o in out if isinstance(o, Request)]) == 1  # the 2nd request is allowed
+    assert spider.requests_made == 2
+    out = list(spider.parse(page("rbi_old_page.html", URL + "?page=2")))
+    assert not [o for o in out if isinstance(o, Request)]  # the cap holds
+    assert spider.requests_made == 2
+    note = spider.check.state(spider.channels[0]).error_detail or ""
+    assert "limit of 2 page requests" in note
+
+
+def test_the_spider_never_asks_for_more_than_fifty_requests(repo) -> None:
+    assert make_spider(ListingSpider, repo, "trai").request_cap == 50
+    assert make_spider(ListingSpider, repo, "trai", max_requests="200").request_cap == 50
+    assert make_spider(ListingSpider, repo, "trai", max_requests="7").request_cap == 7

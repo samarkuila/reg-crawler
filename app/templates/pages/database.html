@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Database{% endblock %}
+
+{#- Page shell only. Same cards, tables and form patterns as the other screens. database.js loads from /api/v1. -#}
+{% block content %}
+<div class="row row-between row-end gap-3">
+  <div>
+    <h1 class="page-title">Database</h1>
+    <p class="page-sub muted">Browse, edit and delete rows in any table. Every change is written to the audit log. Write-once tables can be browsed but not changed.</p>
+  </div>
+  <button type="button" class="btn btn-d" id="db-reset">Reset database…</button>
+</div>
+
+<div class="row gap-4 db-layout">
+  <section class="card db-tables" aria-label="Tables">
+    <div class="card-head"><h2 class="section-title">Tables</h2></div>
+    <ul class="db-table-list" id="db-tables"></ul>
+  </section>
+
+  <section class="card db-main" aria-label="Rows">
+    <div class="card-head">
+      <h2 class="section-title" id="db-title">Pick a table</h2>
+      <span class="row gap-3"><span class="muted text-13" id="db-count" aria-live="polite"></span><button type="button" class="btn btn-p" id="db-add" hidden>Add row</button></span>
+    </div>
+    <form class="pad-card row row-end gap-3" role="search" id="db-search" novalidate>
+      <div class="field"><label for="db-q">Search this table</label><input id="db-q" type="search" autocomplete="off"></div>
+      <button type="submit" class="btn btn-p">Search</button>
+      <button type="button" class="btn btn-o" id="db-clear">Clear</button>
+    </form>
+    <p class="pad-card muted text-13" id="db-note" hidden></p>
+    <div class="table-wrap">
+      <table>
+        <thead id="db-head"></thead>
+        <tbody id="db-rows"></tbody>
+      </table>
+    </div>
+    <div class="pad-card row row-between gap-3">
+      <button type="button" class="btn btn-o" id="db-prev">Previous</button>
+      <button type="button" class="btn btn-o" id="db-next">Next</button>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/database.js"></script>
+{% endblock %}

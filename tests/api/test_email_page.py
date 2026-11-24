@@ -19,9 +19,18 @@ def preview(client):
 def test_email_page_renders_shell_and_script(client) -> None:
     html = client.get("/email").text
     for marker in (
-        'id="em-checks"', 'id="em-rows"', 'id="em-frame"', 'id="e-sub"', 'id="e-to"', 'id="e-cc"',
-        'id="em-copy"', 'id="em-eml"', 'id="em-approve"', "/static/js/pages/email.js",
-        "Export cycle to Excel", 'sandbox="allow-same-origin"',
+        'id="em-checks"',
+        'id="em-rows"',
+        'id="em-frame"',
+        'id="e-sub"',
+        'id="e-to"',
+        'id="e-cc"',
+        'id="em-copy"',
+        'id="em-eml"',
+        'id="em-approve"',
+        "/static/js/pages/email.js",
+        "Export cycle to Excel",
+        'sandbox="allow-same-origin"',
     ):
         assert marker in html, marker
     assert "not built yet" not in html
@@ -87,7 +96,7 @@ def test_cycle_export_roles_and_validation(client) -> None:
 
 
 def test_export_neutralises_spreadsheet_formulas() -> None:
-    assert _safe("=HYPERLINK(\"x\")") == "'=HYPERLINK(\"x\")"
+    assert _safe('=HYPERLINK("x")') == '\'=HYPERLINK("x")'
     assert _safe("Circular 12") == "Circular 12"
 
 

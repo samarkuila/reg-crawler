@@ -44,6 +44,7 @@ const cycleSelect = document.querySelector('[data-role="cycle-select"]');
 const state = {
   cycle: cycleSelect ? cycleSelect.value : "",
   data: null, // /items response
+  showBaseline: false,
   health: null, // /source-checks response (null when the cycle has no run)
   sme: [],
   filters: { authority: "", type: "", q: "" },
@@ -70,7 +71,7 @@ const byId = (id) => items().find((i) => i.id === id);
 
 // ---------- Loading ----------
 async function load() {
-  const query = { cycle: state.cycle || undefined };
+  const query = { cycle: state.cycle || undefined, origin: state.showBaseline ? "BASELINE" : undefined };
   const [data, health, sme] = await Promise.all([
     get("/items", query),
     get("/source-checks", query, { silent: true }).catch((e) => {
@@ -95,7 +96,20 @@ async function reload() {
 }
 
 // ---------- Rendering: header, health, counts ----------
+function renderBaselineNote() {
+  const box = $("rv-baseline");
+  const n = state.data.baseline_hidden || 0;
+  box.hidden = !n && !state.showBaseline;
+  if (box.hidden) return;
+  box.innerHTML = state.showBaseline
+    ? '<span class="text-14">Showing only items stored by a source’s <strong>first crawl</strong> (already on the website before monitoring began).</span>' +
+      '<button type="button" class="btn btn-o" data-baseline-toggle>Back to the review queue</button>'
+    : `<span class="text-14"><strong>${n} ${n === 1 ? "item was" : "items were"}</strong> stored by first crawls and ${n === 1 ? "is" : "are"} not in this queue, because ${n === 1 ? "it was" : "they were"} already on the websites before monitoring began. Anything new will appear here.</span>` +
+      '<button type="button" class="btn btn-o" data-baseline-toggle>Show them</button>';
+}
+
 function renderAll() {
+  renderBaselineNote();
   renderSub();
   renderHealth();
   renderCounts();
@@ -695,6 +709,10 @@ function onKey(e) {
 document.addEventListener("click", (e) => {
   const target = e.target instanceof Element ? e.target : null;
   if (!target) return;
+  if (target.closest("[data-baseline-toggle]")) {
+    state.showBaseline = !state.showBaseline;
+    return void reload();
+  }
   const open = target.closest("[data-open]");
   if (open) {
     e.preventDefault();
@@ -770,5 +788,6 @@ $("f-q").addEventListener("input", (e) => {
 $("rv-form")?.addEventListener("submit", (e) => e.preventDefault());
 $("rv-panel").addEventListener("submit", (e) => e.preventDefault());
 document.addEventListener("keydown", onKey);
+window.addEventListener("run-finished", reload); // a crawl just ended: show the new items
 
 reload();
