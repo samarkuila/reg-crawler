@@ -9,8 +9,9 @@ There are no tools, no function calling and no browsing in any request (CLAUDE.m
 - Every call comes back with model, deployment, tokens, latency and cost so the caller can log it
   to `agent_run` (`LoggedLlm`), and a daily budget stops further calls.
 
-Settings come from the environment (.env): LLM_PROVIDER=azure_openai|openai, LLM_MODEL,
-AZURE_OPENAI_ENDPOINT / _DEPLOYMENT / _API_VERSION, LLM_API_KEY. The key is never logged.
+Settings come from the environment (.env): AWS_GPT_LUNA_KEY / _ENDPOINT / _MODEL, AWS_REGION
+The model is called through an OpenAI-compatible endpoint (AWS_GPT_LUNA_ENDPOINT).
+The key is never logged.
 """
 
 import json
@@ -61,11 +62,9 @@ class LlmClient(Protocol):
 
 @dataclass(frozen=True)
 class LlmConfig:
-    provider: str = ""
     model: str = DEFAULT_MODEL
     endpoint: str = ""
-    deployment: str = ""
-    api_version: str = ""
+    region: str = ""
     api_key: str = field(default="", repr=False)  # never printed
     timeout: float = DEFAULT_TIMEOUT
     price_in: float = DEFAULT_PRICE_IN
@@ -79,12 +78,10 @@ class LlmConfig:
             return next((e[n].strip() for n in names if e.get(n, "").strip()), default)
 
         return cls(
-            provider=first("LLM_PROVIDER").lower(),
-            model=first("LLM_MODEL", default=DEFAULT_MODEL),
-            endpoint=first("AZURE_OPENAI_ENDPOINT", "LLM_ENDPOINT"),
-            deployment=first("AZURE_OPENAI_DEPLOYMENT", "LLM_DEPLOYMENT"),
-            api_version=first("AZURE_OPENAI_API_VERSION", "LLM_API_VERSION"),
-            api_key=first("LLM_API_KEY"),
+            model=first("AWS_GPT_LUNA_MODEL", default=DEFAULT_MODEL),
+            endpoint=first("AWS_GPT_LUNA_ENDPOINT"),
+            region=first("AWS_REGION"),
+            api_key=first("AWS_GPT_LUNA_KEY"),
             timeout=float(first("LLM_TIMEOUT_SECONDS", default=str(DEFAULT_TIMEOUT))),
             price_in=float(first("LLM_PRICE_IN_INR_PER_1M", default=str(DEFAULT_PRICE_IN))),
             price_out=float(first("LLM_PRICE_OUT_INR_PER_1M", default=str(DEFAULT_PRICE_OUT))),
@@ -92,12 +89,10 @@ class LlmConfig:
 
     def problem(self) -> str | None:
         """Why this configuration cannot be used, or None when it can."""
-        if self.provider not in ("azure_openai", "openai"):
-            return "LLM_PROVIDER must be azure_openai or openai"
         if not self.api_key:
-            return "LLM_API_KEY is not set"
-        if self.provider == "azure_openai" and not (self.endpoint and self.deployment):
-            return "AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT are required"
+            return "AWS_GPT_LUNA_KEY is not set"
+        if not self.endpoint:
+            return "AWS_GPT_LUNA_ENDPOINT is not set"
         return None
 
 
@@ -123,30 +118,20 @@ def make_llm_client(config: LlmConfig | None = None, sdk: Any = None) -> LlmClie
 
 
 class OpenAiCompatClient:
-    """Azure OpenAI / OpenAI chat completions with structured JSON output. Text in, JSON out."""
+    """OpenAI-compatible chat completions (AWS endpoint). Text in, JSON out."""
 
     def __init__(self, config: LlmConfig, sdk: Any = None) -> None:
         self._config = config
         self.model = config.model
-        self.deployment = config.deployment or None
+        self.deployment = None  # no separate deployment name: the model id is sent as is
         self._sdk = sdk  # injected in tests; built on first use otherwise
 
     def _client(self) -> Any:
         if self._sdk is None:
             c = self._config
-            if c.provider == "azure_openai":
-                from openai import AzureOpenAI
+            from openai import OpenAI
 
-                self._sdk = AzureOpenAI(
-                    azure_endpoint=c.endpoint,
-                    api_key=c.api_key,
-                    api_version=c.api_version or None,
-                    timeout=c.timeout,
-                )
-            else:
-                from openai import OpenAI
-
-                self._sdk = OpenAI(api_key=c.api_key, timeout=c.timeout)
+            self._sdk = OpenAI(base_url=c.endpoint, api_key=c.api_key, timeout=c.timeout)
         return self._sdk
 
     def complete_json(

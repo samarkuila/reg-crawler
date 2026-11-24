@@ -109,10 +109,10 @@ def test_the_cli_runs_with_the_fake_client_and_writes_the_report(
 
 
 def test_the_cli_refuses_without_a_configured_endpoint(tmp_path, capsys, monkeypatch) -> None:
-    for key in ("LLM_PROVIDER", "LLM_API_KEY"):
+    for key in ("AWS_GPT_LUNA_ENDPOINT", "AWS_GPT_LUNA_KEY"):
         monkeypatch.delenv(key, raising=False)
     code = main(["agent-eval", "--golden", str(GOLDEN), "--out", str(tmp_path / "r.md")])
-    assert code == 2 and "LLM_PROVIDER" in capsys.readouterr().err
+    assert code == 2 and "AWS_GPT_LUNA_KEY" in capsys.readouterr().err
     assert not (tmp_path / "r.md").exists()
 
 

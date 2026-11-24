@@ -114,10 +114,10 @@ def cmd_agent_eval(args: argparse.Namespace) -> int:
         problem = config.problem()
         if problem:
             raise ImportError_(
-                f"Cannot run the evaluation: {problem}. Set the LLM_* variables in .env, "
+                f"Cannot run the evaluation: {problem}. Set the AWS_GPT_LUNA_* variables in .env, "
                 "or use --fake to check the plumbing only."
             )
-        client, label = make_llm_client(config), f"{config.provider} / {config.model}"
+        client, label = make_llm_client(config), f"AWS / {config.model}"
     text, version = "", None
     try:
         from app.agents import settings as agent_settings
