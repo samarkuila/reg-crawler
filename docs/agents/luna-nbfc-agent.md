@@ -30,7 +30,7 @@ Luna answers, for each detected item: *"Does this concern NBFCs / TVS Credit, wh
 | Reasoning effort | `low` for screen & sweep · `medium` for extract | Configurable per task |
 | Output | Strict JSON schema (structured outputs) | Rejected/retried once if invalid |
 
-`.env` keys: `LLM_PROVIDER=azure_openai|openai`, `LLM_MODEL=gpt-6-luna`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, `LLM_API_KEY` (from secret store, never committed), `AGENT_LUNA_ENABLED`, `AGENT_DAILY_BUDGET_INR`.
+`.env` keys: `AWS_GPT_LUNA_MODEL=gpt-6-luna`, `AWS_GPT_LUNA_ENDPOINT`, `AWS_REGION`, `AWS_GPT_LUNA_KEY` (from secret store, never committed), `AGENT_LUNA_ENABLED`, `AGENT_DAILY_BUDGET_INR`.
 
 The agent sits behind `LlmClient`, so the provider/model can be swapped (e.g. to Claude) without touching agent logic.
 
