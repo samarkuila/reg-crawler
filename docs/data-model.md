@@ -208,6 +208,7 @@ erDiagram
     text url
     string ref_no
     date displayed_date
+    text description_text
     json raw_extra
     datetime fetched_at
   }
@@ -423,6 +424,9 @@ Every table and column in §4 exists. These differences are deliberate:
    `ref_no`, `displayed_date`, `raw_extra`, `fetched_at`). Architecture §3.1 says the pipelines write
    "raw ListingItems", but §4 had no table for them. They are not regulatory items: Detection
    (Prompt 12) reads them and decides what is new. Rows are only inserted by the crawler.
+   `description_text` (migration `0009`) holds the row's description / paragraph as plain text
+   (HTML stripped, nullable). The crawler derives it from `raw_extra["description_html"]`, which is
+   still kept as the raw source.
 8. **`document.needs_ocr`** (Prompt 12, migration `0004`): set when a stored PDF has almost no text layer (a scan), so a person knows the system could not read it. Added as a plain column, so the append-only triggers on `document` are unchanged.
 9. **New table `alert`** and **`crawl_run.sources`** (Prompt 13, migration `0005`). `alert` holds what a person should look at after a run (failed or blocked sources, urgent items, run problems); `delivered_at` is for the V2 notifier. `crawl_run.sources` lists the source ids a run covers (empty = all), so progress for a one-source run is right.
 10. **New tables `ai_extraction`, `agent_flag`, `agent_run`** (Prompt 13b, migration `0006`), exactly the columns of the agent spec §7 plus `agent_flag.item_id` (a disagreement flag belongs to an item) and `agent_flag.created_at`. `ai_extraction` is append-only (database trigger, like `snapshot`, `document` and `audit_event`). `agent_run.task` and `ai_extraction.task` also allow `SWEEP`.

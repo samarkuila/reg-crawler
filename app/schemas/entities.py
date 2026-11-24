@@ -232,6 +232,7 @@ class RawListingItem(Entity):
     url: str  # canonical URL
     ref_no: str | None = None
     displayed_date: date | None = None  # as shown on the site; never used to decide "new"
+    description_text: str | None = None  # plain text of the row's description / paragraph
     raw_extra: dict[str, Any] = Field(default_factory=dict)
     fetched_at: datetime
 

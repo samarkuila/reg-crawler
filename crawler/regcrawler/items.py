@@ -13,6 +13,7 @@ class ListingItem(scrapy.Item):
     url = scrapy.Field()
     ref_no = scrapy.Field()
     displayed_date = scrapy.Field()  # as read; the NormalisePipeline turns it into a date
+    description_text = scrapy.Field()  # plain text; the DbPipeline derives it from description_html
     raw_extra = scrapy.Field()  # dict: description HTML, guid, anything else worth keeping
     snapshot_id = scrapy.Field()  # filled by SnapshotPipeline
 

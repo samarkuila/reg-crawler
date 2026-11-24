@@ -172,6 +172,11 @@ class DbPipeline:
         self._row_no += 1
         extra = dict(item.get("raw_extra") or {})
         extra["row_no"] = self._row_no
+        description_text = (
+            item.get("description_text")
+            or normalise.html_to_text(str(extra.get("description_html") or ""))
+            or None
+        )
         self.rows.setdefault(channel, []).append(
             RawListingItem(
                 id=_id("raw"),
@@ -183,6 +188,7 @@ class DbPipeline:
                 url=item["url"],
                 ref_no=item.get("ref_no"),
                 displayed_date=item.get("displayed_date"),
+                description_text=description_text,
                 raw_extra=extra,
                 fetched_at=now_ist(),
             )

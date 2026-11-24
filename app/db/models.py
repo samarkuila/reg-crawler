@@ -279,6 +279,8 @@ class RawListingItem(Base):
     url: Mapped[str] = mapped_column(Text)
     ref_no: Mapped[str | None] = mapped_column(String(200))
     displayed_date: Mapped[date | None] = mapped_column(Date)
+    # Plain text of the row's description / paragraph (HTML stripped); None if the row had none.
+    description_text: Mapped[str | None] = mapped_column(Text)
     raw_extra: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     fetched_at: Mapped[datetime] = mapped_column(TZDateTime)
 
