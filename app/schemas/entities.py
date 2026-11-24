@@ -15,19 +15,23 @@ from app.schemas.enums import (
     AgentTask,
     AlertKind,
     Applicability,
+    BaselineStatus,
     ChangeType,
     Channel,
     CheckChannel,
     CheckStatus,
     Cycle,
     FetchStatus,
+    FirstRunMode,
     FlagStatus,
     FlagType,
+    ItemOrigin,
     ItemState,
     NbfcRelevance,
     Priority,
     RecipientKind,
     RunStatus,
+    SeenReason,
     SourceType,
     StatusColour,
     Treatment,
@@ -65,6 +69,22 @@ class Source(Entity):
     active: bool = False
     current_version: int = 0
     planned: bool = False  # (added) on the monitoring list but not in the POC; always inactive
+    retired: bool = False  # (added) deleted from the register; kept so history stays whole
+    # First-crawl window (added 24.11.2026). None = use crawler.first_run in settings.yaml.
+    first_run_mode: FirstRunMode | None = None
+    first_run_days: int | None = Field(None, ge=1, le=3650)
+    sorted_newest_first: bool = True  # the page lists newest first, so paging may stop early
+    baseline_status: BaselineStatus = BaselineStatus.NOT_BASELINED
+    baseline_at: datetime | None = None
+    baseline_window_start: date | None = None
+
+    @property
+    def needs_browser(self) -> bool:
+        """Whether a crawl must render the page in a browser.
+
+        An RSS feed or HTML listing never does, whatever an older version stored in requires_js.
+        """
+        return self.requires_js and self.type not in (SourceType.RSS, SourceType.HTML_LIST)
 
 
 class SourceVersion(Entity):
@@ -105,6 +125,9 @@ class SourceCheck(Entity):
     items_found: int | None = None
     error_detail: str | None = None
     snapshot_id: str | None = None
+    # Run counters (added): rows_parsed, pages_read, requests_made, window_start from the crawler;
+    # new, modified, backdated, reappeared, unchanged, known_older, baseline_items from detection.
+    stats: dict[str, Any] = Field(default_factory=dict)
 
 
 class Snapshot(Entity):
@@ -232,6 +255,24 @@ class RegulatoryItem(Entity):
     first_seen_at: datetime
     last_seen_at: datetime
     summary: str | None = None  # (added) one-line change summary, e.g. UNSC "alias added"
+    origin: ItemOrigin = ItemOrigin.CRAWL  # (added) BASELINE = stored by the first crawl window
+    flags: list[str] = Field(default_factory=list)  # (added) e.g. "old date, new on page"
+
+
+class SeenFingerprint(Entity):
+    """Insert-only. An item a source's first crawl saw but did not store (older than the window).
+
+    Only its fingerprint is kept, so later crawls can tell a known-old item from a new one.
+    """
+
+    id: str
+    source_id: str
+    fingerprint: str
+    title: str
+    published_date: date | None = None
+    first_seen_run_id: str
+    first_seen_at: datetime
+    reason: SeenReason
 
 
 class ItemObservation(Entity):

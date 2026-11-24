@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from app.repositories.base import Repository
 from app.schemas.entities import Alert, now_ist
+from app.services import readable
 
 
 class AlertService:
@@ -24,4 +25,8 @@ class AlertService:
             a for a in self._repo.list_alerts() if a.run_id is None and a.created_at >= cutoff
         ]
         order = {"urgent": 0, "warning": 1}
-        return sorted(found, key=lambda a: (order[a.severity], a.created_at, a.id))
+        found.sort(key=lambda a: (order[a.severity], a.created_at, a.id))
+        return [
+            a.model_copy(update={"message": readable.plain_error(a.message) or a.message})
+            for a in found
+        ]

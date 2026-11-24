@@ -25,14 +25,18 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 from app.repositories.base import Repository
+from app.schemas.api import CrawlStatus
 from app.schemas.entities import Alert, CrawlRun, Source, SourceCheck, now_ist
 from app.schemas.enums import (
     AlertKind,
+    BaselineStatus,
     CheckChannel,
     CheckStatus,
     Cycle,
@@ -43,11 +47,14 @@ from app.schemas.enums import (
 from app.services.detection import DetectionResult, DetectionService
 from app.services.documents import DocumentService
 from app.services.errors import ConflictError, InvalidError, NotFoundError
+from app.services.first_run import load_first_run_config, window_for
 from app.services.permissions import RUN_ROLES, require_role
+from app.services.robots import RobotsCheck
 
 log = logging.getLogger(__name__)
 ACTOR = "crawl-runner"
 ROOT = Path(__file__).resolve().parents[2]
+MAX_REQUESTS_PER_HOST = 50  # page requests to one website in one run (never exceeded)
 SOURCE_TIMEOUT_SECONDS = 300
 STALE_LOCK_SECONDS = 30 * 60
 
@@ -94,7 +101,16 @@ class LaunchResult:
 
 
 class SpiderLauncher(Protocol):
-    def launch(self, spider: str, source_id: str, run_id: str) -> LaunchResult: ...
+    def launch(
+        self,
+        spider: str,
+        source_id: str,
+        run_id: str,
+        lookback_days: int | None = None,
+        first_run: bool = False,
+        first_run_window: str | None = None,
+        max_requests: int | None = None,
+    ) -> LaunchResult: ...
 
 
 class SubprocessLauncher:
@@ -114,7 +130,16 @@ class SubprocessLauncher:
         self._fixtures = fixtures or {}
         self._env = env or {}
 
-    def launch(self, spider: str, source_id: str, run_id: str) -> LaunchResult:
+    def launch(
+        self,
+        spider: str,
+        source_id: str,
+        run_id: str,
+        lookback_days: int | None = None,
+        first_run: bool = False,
+        first_run_window: str | None = None,
+        max_requests: int | None = None,
+    ) -> LaunchResult:
         files_root = Path(os.environ.get("FILES_ROOT") or ROOT).resolve()
         log_file = files_root / "data" / "logs" / "runs" / run_id / f"{source_id}-{spider}.log"
         log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -124,6 +149,12 @@ class SubprocessLauncher:
             "-a", f"run_id={run_id}",
             "-s", f"LOG_FILE={log_file}",
         ]  # fmt: skip
+        if lookback_days:
+            command += ["-a", f"lookback_days={lookback_days}"]
+        if first_run:
+            command += ["-a", "first_run=1", "-a", f"first_run_window={first_run_window or ''}"]
+        if max_requests is not None:
+            command += ["-a", f"max_requests={max_requests}"]
         fixture = self._fixtures.get((source_id, spider))
         if fixture:
             command += ["-a", f"fixture={fixture}"]
@@ -211,8 +242,11 @@ class CrawlRunner:
         agent: Any = None,
         lock: RunLock | None = None,
         disabled_reason: str | None = None,
+        robots_factory: Callable[[], RobotsCheck] | None = None,
     ) -> None:
         self._repo = repo
+        self._robots_factory = robots_factory  # None = no pre-check (tests, demo)
+        self._robots: RobotsCheck | None = None
         self._launcher = launcher
         self._documents = documents
         self._agent = agent  # Luna (advisory); None or off = the run works exactly as before
@@ -220,6 +254,9 @@ class CrawlRunner:
         self._disabled = disabled_reason
         self._thread: threading.Thread | None = None
         self._summaries: dict[str, RunSummary] = {}
+        self._current: str | None = None  # the page being read (this process only)
+        self._host_requests: dict[str, int] = {}  # page requests per website in this run
+        self._phase: str | None = None
 
     # --- starting ----------------------------------------------------------------------------
 
@@ -281,6 +318,34 @@ class CrawlRunner:
     def is_running(self) -> bool:
         return self._lock.held()
 
+    _PHASES = {
+        "reading": "Reading the regulator pages",
+        "detecting": "Finding new and changed items",
+        "documents": "Downloading documents",
+        "screening": "Screening items",
+    }
+
+    def status(self) -> CrawlStatus:
+        """What is happening now. Safe to poll: it only reads."""
+        running = self._lock.held()
+        run = next((r for r in self._repo.list_runs() if r.status == RunStatus.RUNNING), None)
+        if not running or run is None:
+            return CrawlStatus(running=False, message="No crawl is running.")
+        active = {s.id for s in self._repo.list_sources() if s.active and not s.planned}
+        scope = set(run.sources) if run.sources else active
+        done = {c.source_id for c in self._repo.list_source_checks(run.id)} & scope
+        mine = self._summaries.get(run.id) is not None
+        phase = self._phase if mine else None
+        return CrawlStatus(
+            running=True,
+            run=run,
+            sources_done=len(done),
+            sources_total=len(scope),
+            current=self._current if mine and phase == "reading" else None,
+            phase=phase,
+            message=self._PHASES.get(phase or "", "Crawl in progress"),
+        )
+
     def _busy_message(self) -> str:
         running = [r for r in self._repo.list_runs() if r.status == RunStatus.RUNNING]
         if running:
@@ -334,18 +399,25 @@ class CrawlRunner:
         summary = RunSummary(run.id, RunStatus.PARTIAL)
         self._summaries[run.id] = summary
         try:
+            self._phase = "reading"
+            self._host_requests = {}
+            self._robots = self._robots_factory() if self._robots_factory else None
             for source in sources:
                 self._lock.touch()
+                self._current = f"{source.authority} · {source.page_name}"
                 try:
                     self._crawl_source(run, source)
                 except Exception as exc:  # one source never stops the others
                     log.exception("Source %s failed unexpectedly", source.id)
                     summary.problems.append(f"{source.page_name}: {exc}")
             self._lock.touch()
+            self._current, self._phase = None, "detecting"
             summary.detection = self._detect(run, summary)
             self._lock.touch()
+            self._phase = "documents"
             self._fetch_documents(summary)
             self._lock.touch()
+            self._phase = "screening"
             self._run_agent(run, summary)
             self._record_alerts(run, summary)
         except Exception as exc:  # the run must still be closed below
@@ -360,16 +432,80 @@ class CrawlRunner:
             try:
                 self._repo.close_run(run.id, summary.status, ACTOR)
             finally:
+                self._current = self._phase = None
                 self._lock.release()
 
+    def _spider_args(self, source: Source, used: int) -> dict[str, Any]:
+        """What the crawl of one source is told: its window and how many requests it may make.
+
+        A source that is NOT_BASELINED gets the first-run window (items older than it are kept as
+        "already seen" by detection, never dropped). A BASELINED source gets the `lookback-days`
+        setting. Either way at most 50 page requests go to one website in one run.
+        """
+        args: dict[str, Any] = {"max_requests": MAX_REQUESTS_PER_HOST - used}
+        if source.baseline_status == BaselineStatus.NOT_BASELINED:
+            window = window_for(source, load_first_run_config())
+            args["first_run"] = True
+            args["first_run_window"] = window.start.isoformat() if window.start else None
+            return args
+        setting = self._repo.get_setting("lookback-days")
+        value = setting.value if setting is not None else None
+        ok = isinstance(value, int) and not isinstance(value, bool) and value >= 1
+        args["lookback_days"] = value if ok else 2
+        return args
+
     def _crawl_source(self, run: CrawlRun, source: Source) -> None:
+        host = (urlparse(source.url).hostname or "").lower()
+        reason = self._robots.blocked_reason(source.url) if self._robots else None
+        if reason:  # the website's robots.txt says no: record it, request nothing, move on
+            for _spider, channel in spiders_for(source):
+                self._repo.record_source_check(
+                    SourceCheck(
+                        id=f"chk-{run.id}-{source.id}-{channel.value.lower()}",
+                        run_id=run.id,
+                        source_id=source.id,
+                        channel=channel,
+                        status=CheckStatus.BLOCKED,
+                        error_detail=reason,
+                    ),
+                    ACTOR,
+                )
+            return
         for spider, channel in spiders_for(source):
+            used = self._host_requests.get(host, 0)
+            if used >= MAX_REQUESTS_PER_HOST:
+                self._repo.record_source_check(
+                    SourceCheck(
+                        id=f"chk-{run.id}-{source.id}-{channel.value.lower()}",
+                        run_id=run.id,
+                        source_id=source.id,
+                        channel=channel,
+                        status=CheckStatus.FAILED,
+                        error_detail=(
+                            f"Not read: the limit of {MAX_REQUESTS_PER_HOST} page requests to "
+                            f"{host} in one run was reached"
+                        ),
+                    ),
+                    ACTOR,
+                )
+                continue
             started = time.monotonic()
             try:
-                result = self._launcher.launch(spider, source.id, run.id)
+                result = self._launcher.launch(
+                    spider, source.id, run.id, **self._spider_args(source, used)
+                )
             except Exception as exc:
                 result = LaunchResult(None, error=f"The crawler could not be started: {exc}")
             self._reconcile(run, source, channel, result, time.monotonic() - started)
+            made = next(
+                (
+                    int(c.stats.get("requests_made") or 0)
+                    for c in self._repo.list_source_checks(run.id)
+                    if c.source_id == source.id and c.channel == channel
+                ),
+                0,
+            )
+            self._host_requests[host] = used + made
 
     def _reconcile(
         self,

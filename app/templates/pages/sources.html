@@ -8,9 +8,15 @@
     <h1 class="page-title">Sources</h1>
     <p class="page-sub muted">What we monitor and how. Every change needs a second person’s approval.</p>
   </div>
-  <button type="button" class="btn btn-p" id="so-add">Add source</button>
+  <div class="row gap-2">
+    <button type="button" class="btn btn-o" id="so-bulk-open">Bulk add</button>
+    <button type="button" class="btn btn-p" id="so-add">Add source</button>
+  </div>
 </div>
 
+<section class="card pad-card stack gap-3" aria-label="Bulk add" id="so-bulk" hidden></section>
+
+<div class="card pad-card row row-between gap-3" id="so-bulkbar" aria-label="Actions for selected sources" hidden></div>
 <div class="stack gap-4" id="so-pending" aria-label="Waiting for approval"></div>
 
 <section class="card" aria-label="Source register">

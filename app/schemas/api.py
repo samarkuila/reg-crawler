@@ -23,6 +23,8 @@ from app.schemas.enums import (
     Channel,
     CheckStatus,
     Cycle,
+    FirstRunMode,
+    ItemOrigin,
     ItemState,
     Priority,
     SourceType,
@@ -75,6 +77,8 @@ class ItemFilter(Model):
     channel: Channel | None = None
     q: str | None = None
     min_relevance: int | None = None
+    origin: ItemOrigin | None = None  # only items with this origin
+    exclude_origin: ItemOrigin | None = None  # leave out items with this origin
 
 
 # --- Runs and source health ------------------------------------------------------------------
@@ -93,6 +97,7 @@ class SourceCheckView(Model):
     items_found: int | None = None
     error_detail: str | None = None
     snapshot_id: str | None = None
+    stats: dict[str, Any] = Field(default_factory=dict)  # run counters
     needs_acknowledgement: bool
     manual_check: ManualCheck | None = None
 
@@ -131,6 +136,18 @@ class ManualCheckIn(Model):
 
 class CrawlRunIn(Model):
     source_id: str | None = None
+
+
+class CrawlStatus(Model):
+    """What the crawler is doing right now (the status strip on every page polls this)."""
+
+    running: bool
+    run: CrawlRun | None = None
+    sources_done: int = 0
+    sources_total: int = 0
+    current: str | None = None  # the page being read, when this process runs the crawl
+    phase: str | None = None  # reading | detecting | documents | screening
+    message: str = ""
 
 
 # --- Items -----------------------------------------------------------------------------------
@@ -224,6 +241,8 @@ class ItemSummary(Model):
     decided: bool
     first_seen_at: datetime
     luna: LunaChip | None = None
+    origin: ItemOrigin = ItemOrigin.CRAWL  # BASELINE = stored by the source's first crawl
+    flags: list[str] = Field(default_factory=list)  # e.g. "old date, new on page"
 
 
 class ItemCounts(Model):
@@ -242,6 +261,7 @@ class ItemListResponse(Model):
     cycle: str | None
     counts: ItemCounts
     items: list[ItemSummary]
+    baseline_hidden: int = 0  # first-crawl items kept out of this queue (see Item history)
 
 
 class ApplicabilitySuggestion(Model):
@@ -411,6 +431,10 @@ class SourceChanges(Model):
     priority: Priority | None = None
     requires_js: bool | None = None
     active: bool | None = None
+    retired: bool | None = None
+    first_run_mode: FirstRunMode | None = None
+    first_run_days: int | None = Field(None, ge=1, le=3650)
+    sorted_newest_first: bool | None = None
 
 
 class SourceCreate(Model):
@@ -426,6 +450,63 @@ class SourceCreate(Model):
     exclude_keywords: list[str] = Field(default_factory=list)
     priority: Priority = Priority.NORMAL
     requires_js: bool = False
+    # First-crawl window overrides (optional; empty = use crawler.first_run in settings.yaml)
+    first_run_mode: FirstRunMode | None = None
+    first_run_days: int | None = Field(None, ge=1, le=3650)
+    sorted_newest_first: bool = True
+
+
+class BulkRowResult(Model):
+    row: int  # 1 = first row under the header
+    status: Literal["OK", "WARNING", "ERROR"]
+    reasons: list[str] = Field(default_factory=list)
+    raw: dict[str, str] = Field(default_factory=dict)  # as typed, sent back on save
+    fields: dict[str, Any] | None = None  # what would be stored; None for an error row
+    authority: str = ""
+    page_name: str = ""
+    url: str = ""
+    source_id: str | None = None  # set once saved
+
+
+class BulkPreview(Model):
+    file_name: str
+    rows: list[BulkRowResult]
+    ok: int
+    warnings: int
+    errors: int
+
+
+class BulkSaveIn(Model):
+    file_name: str = "pasted rows"
+    rows: list[dict[str, str]]
+
+
+class BulkErrorsIn(Model):
+    rows: list[dict[str, str]]
+
+
+class BulkSaveResult(Model):
+    batch_id: str
+    saved: int
+    skipped: int
+    rows: list[BulkRowResult]
+
+
+class BulkDecisionItem(Model):
+    source_id: str
+    version: int
+
+
+class BulkDecisionIn(Model):
+    items: list[BulkDecisionItem] = Field(min_length=1, max_length=200)
+    reason: str = Field("", max_length=500)  # needed to reject
+
+
+class BulkDecisionResult(Model):
+    source_id: str
+    version: int
+    ok: bool
+    message: str = ""
 
 
 class VersionRejectIn(Model):
@@ -613,3 +694,56 @@ class Trail(Model):
     internal_ref: str
     title: str
     steps: list[TrailStep]
+
+
+# --- database admin (docs/constraints-and-policies.md, "Database admin") ---------------------
+
+
+class DbTable(BaseModel):
+    name: str
+    rows: int
+    editable: bool
+    reason: str | None = None
+
+
+class DbColumn(BaseModel):
+    name: str
+    type: str
+    nullable: bool
+    primary_key: bool
+    choices: list[str] | None = None
+
+
+class DbTablePage(BaseModel):
+    table: str
+    columns: list[DbColumn]
+    rows: list[dict[str, Any]]
+    total: int
+    editable: bool
+    reason: str | None = None
+
+
+class DbRowCreateIn(BaseModel):
+    values: dict[str, Any]
+
+
+class DbRowUpdateIn(BaseModel):
+    key: dict[str, Any]
+    changes: dict[str, Any]
+
+
+class DbRowDeleteIn(BaseModel):
+    key: dict[str, Any]
+    cascade: bool = False  # also delete the rows that point to this one
+
+
+class DbDeleteOut(BaseModel):
+    deleted: int  # rows removed in total, including any that pointed to the row
+
+
+class DbResetIn(BaseModel):
+    confirm: str
+
+
+class DbResetOut(BaseModel):
+    backup: str

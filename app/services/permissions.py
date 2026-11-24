@@ -7,6 +7,7 @@ from app.services.errors import ForbiddenError
 REVIEW_ROLES = frozenset({UserRole.REVIEWER, UserRole.APPROVER})
 CONFIG_ROLES = frozenset({UserRole.ADMIN, UserRole.APPROVER})
 APPROVER_ROLES = frozenset({UserRole.APPROVER})
+DB_ADMIN_ROLES = frozenset({UserRole.ADMIN})
 RUN_ROLES = frozenset({UserRole.ADMIN, UserRole.REVIEWER, UserRole.APPROVER})
 
 _ROLE_NAMES = {

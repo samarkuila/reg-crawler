@@ -20,6 +20,7 @@
   ('sources', '/sources', 'Sources'),
   ('settings', '/settings', 'Settings'),
   ('audit', '/audit', 'Audit log'),
+  ('database', '/database', 'Database'),
 ] -%}
 <a class="skip-link" href="#main">Skip to content</a>
 <div class="app">
@@ -71,6 +72,7 @@
       {%- endfor %}
     </nav>
     <main class="main" id="main">
+      <div id="crawl-status" class="crawl-status" role="status" aria-live="polite" hidden></div>
       <div id="alert-banner" class="alert-stack" role="status" aria-live="polite" hidden></div>
       {% block content %}{% endblock %}
     </main>

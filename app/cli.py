@@ -52,6 +52,29 @@ def cmd_new_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rebaseline(args: argparse.Namespace) -> int:
+    """Set a source back to NOT_BASELINED. Deletes nothing; writes an audit event."""
+    from app.schemas.enums import BaselineStatus
+
+    repo = _repository()
+    source = repo.get_source(args.source)
+    if source is None:
+        raise ImportError_(f"Unknown source {args.source!r}.")
+    if source.baseline_status == BaselineStatus.NOT_BASELINED:
+        print(f"{source.id} is not baselined yet; nothing to do.")
+        return 0
+    repo.set_source_baseline(
+        source.id,
+        BaselineStatus.NOT_BASELINED,
+        None,
+        args.actor,
+        "REBASELINE_REQUESTED",
+        {"previous_window_start": str(source.baseline_window_start or ""), "via": "cli"},
+    )
+    print(f"{source.id}: its next crawl applies the first-run window again. Nothing was deleted.")
+    return 0
+
+
 def cmd_detect(args: argparse.Namespace) -> int:
     """Turn the rows a crawl stored into items (and, with --documents, fetch their documents)."""
     from app.services.detection import DetectionService
@@ -187,6 +210,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--actor", required=True, help="Your name as shown in the app")
     p.add_argument("--cycle", default="ADHOC", choices=["MORNING", "EOD", "ADHOC", "URGENT"])
     p.set_defaults(func=cmd_new_run)
+
+    p = sub.add_parser("rebaseline", help="Apply the first-run window again on the next crawl")
+    p.add_argument("--source", required=True, help="Source id")
+    p.add_argument("--actor", required=True, help="Your name as shown in the app")
+    p.set_defaults(func=cmd_rebaseline)
 
     p = sub.add_parser("detect", help="Detect items from a crawl run's stored rows")
     p.add_argument("--run", required=True, help="Crawl run id (see new-run)")

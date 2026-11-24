@@ -2,11 +2,12 @@
 // Presentation only: loads /api/v1/sources, renders, and posts what the person does. Who may
 // edit, who may approve and what a valid source looks like are decided by the services.
 
-import { get, post } from "../api.js";
-import { askText, closeDrawer, diffGridHtml, escapeHtml, formatDate, formatDateTime, openDrawer, toast } from "../ui.js";
+import { del, get, post } from "../api.js";
+import { askText, closeDrawer, confirmModal, diffGridHtml, escapeHtml, formatDate, formatDateTime, openDrawer, toast } from "../ui.js";
 
 const $ = (id) => document.getElementById(id);
-const state = { views: [] };
+const state = { views: [], selected: new Set(), bulk: null };
+const keyOf = (v) => `${v.source.id}|${v.pending_version.version}`;
 
 const TYPES = [
   ["RSS", "RSS feed + HTML listing"],
@@ -23,6 +24,7 @@ const SELECTORS = [
   ["title", "Title selector"],
   ["link", "Link selector"],
   ["date", "Date selector"],
+  ["header_row", "Heading rows (dates and section names)"],
   ["ref_no_regex", "Reference no. pattern (regex)"],
 ];
 
@@ -37,15 +39,19 @@ async function load() {
 }
 
 // ---------- Pending approval ----------
-function pendingCard(v, index) {
+function pendingCard(v, index, many) {
   const p = v.pending_version;
   const s = v.source;
+  const diff = diffGridHtml(v.pending_changes, `Before${s.current_version ? ` (v${s.current_version})` : ""}`, `After (v${p.version})`);
   return (
     `<section class="card pad-card stack gap-3 card-pending" aria-label="Pending approval" data-source="${escapeHtml(s.id)}">` +
     '<div class="row row-between gap-2"><div class="row gap-2">' +
+    (many
+      ? `<input type="checkbox" data-select="${escapeHtml(keyOf(v))}" aria-label="Select ${escapeHtml(s.authority)} ${escapeHtml(s.page_name)}"${state.selected.has(keyOf(v)) ? " checked" : ""}>`
+      : "") +
     `${badge("mod", "Pending approval")}<h2 class="section-title-sm">${escapeHtml(s.authority)} · ${escapeHtml(s.page_name)} — version ${p.version}</h2></div>` +
     `<span class="muted text-13">Requested by ${escapeHtml(p.requested_by)} · ${escapeHtml(formatDateTime(p.ts))}</span></div>` +
-    diffGridHtml(v.pending_changes, `Before${s.current_version ? ` (v${s.current_version})` : ""}`, `After (v${p.version})`) +
+    (many ? `<details><summary>Show before and after</summary>${diff}</details>` : diff) +
     '<div class="row gap-2">' +
     `<button type="button" class="btn btn-g" data-approve="${index}"${v.can_decide ? "" : " disabled"}>Approve</button>` +
     `<button type="button" class="btn btn-d" data-reject="${index}"${v.can_decide ? "" : " disabled"}>Reject</button>` +
@@ -57,7 +63,193 @@ function pendingCard(v, index) {
 
 function renderPending() {
   const pending = state.views.filter((v) => v.pending_version);
-  $("so-pending").innerHTML = pending.map((v) => pendingCard(v, state.views.indexOf(v))).join("");
+  const many = pending.length > 1;
+  const live = new Set(pending.map(keyOf));
+  for (const k of [...state.selected]) if (!live.has(k)) state.selected.delete(k);
+  $("so-pending").innerHTML = pending.map((v) => pendingCard(v, state.views.indexOf(v), many)).join("");
+  renderBulkBar(pending, many);
+}
+
+// ---------- Selected pending sources: approve, reject, test ----------
+function renderBulkBar(pending, many) {
+  const bar = $("so-bulkbar");
+  bar.hidden = !many;
+  if (!many) return;
+  const uploaders = [...new Set(pending.map((v) => v.pending_version.requested_by))];
+  const n = state.selected.size;
+  bar.innerHTML =
+    '<div class="row gap-2 wrap">' +
+    uploaders.map((u) => `<button type="button" class="btn btn-o" data-select-by="${escapeHtml(u)}">Select all by ${escapeHtml(u)}</button>`).join("") +
+    `<button type="button" class="btn btn-o" data-select-none${n ? "" : " disabled"}>Clear selection</button></div>` +
+    '<div class="row gap-2 wrap">' +
+    `<span class="muted text-13" aria-live="polite">${n} selected</span>` +
+    `<button type="button" class="btn btn-g" data-bulk="approve"${n ? "" : " disabled"}>Approve selected</button>` +
+    `<button type="button" class="btn btn-d" data-bulk="reject"${n ? "" : " disabled"}>Reject selected</button>` +
+    `<button type="button" class="btn btn-o" data-bulk="test"${n ? "" : " disabled"}>Test selected</button></div>`;
+}
+
+function selectedItems() {
+  return [...state.selected].map((k) => {
+    const [source_id, version] = k.split("|");
+    return { source_id, version: Number(version) };
+  });
+}
+
+const sourceName = (id) => {
+  const v = view(id);
+  return v ? `${v.source.authority} · ${v.source.page_name}` : id;
+};
+
+async function bulkDecide(kind) {
+  const items = selectedItems();
+  if (!items.length) return;
+  let body = { items };
+  if (kind === "reject") {
+    const reason = await askText({
+      title: `Reject ${items.length} change${items.length === 1 ? "" : "s"}?`,
+      intro: "The current versions stay in use. The reason is recorded in the audit log for each source.",
+      label: "Reason for rejecting",
+      confirmLabel: "Reject selected",
+      danger: true,
+    });
+    if (!reason) return;
+    body = { items, reason };
+  }
+  let results;
+  try {
+    results = await post(`/sources/bulk-decision/${kind}`, body);
+  } catch {
+    return;
+  }
+  const failed = results.filter((r) => !r.ok);
+  const done = results.length - failed.length;
+  toast(`${done} ${kind === "approve" ? "approved" : "rejected"}${failed.length ? `, ${failed.length} not changed` : ""}.`, { type: failed.length ? "err" : "ok" });
+  const names = Object.fromEntries(failed.map((r) => [r.source_id, sourceName(r.source_id)]));
+  state.selected = new Set(failed.map((r) => `${r.source_id}|${r.version}`));
+  await load();
+  if (failed.length) {
+    const root = $("so-test");
+    root.hidden = false;
+    root.innerHTML =
+      '<h2 class="section-title-sm">Not changed</h2><ul>' +
+      failed.map((r) => `<li><strong>${escapeHtml(names[r.source_id])}</strong>: ${escapeHtml(r.message)}</li>`).join("") +
+      "</ul>";
+    root.scrollIntoView({ block: "nearest" });
+  }
+}
+
+// One source at a time. The server keeps the pace (2 s apart, one request per website at a time,
+// circuit breaker) and never works around a verification page: such a source shows "Blocked".
+async function testSelected() {
+  const items = selectedItems();
+  if (!items.length) return;
+  const root = $("so-test");
+  root.hidden = false;
+  const rows = [];
+  const paint = (current) => {
+    root.innerHTML =
+      '<h2 class="section-title-sm">Test selected (dry run, nothing saved)</h2>' +
+      `<p class="text-14" aria-live="polite">${current ? `Testing ${rows.length + 1} of ${items.length}: ${escapeHtml(sourceName(current))}…` : `Finished ${items.length} test${items.length === 1 ? "" : "s"}.`}</p>` +
+      '<div class="table-wrap"><table><thead><tr><th scope="col">Source</th><th scope="col">Result</th><th scope="col">What happened</th></tr></thead><tbody>' +
+      rows.map((r) => `<tr><td>${escapeHtml(sourceName(r.id))}</td><td>${r.badge}</td><td>${escapeHtml(r.message)}</td></tr>`).join("") +
+      "</tbody></table></div>";
+  };
+  for (const item of items) {
+    paint(item.source_id);
+    root.scrollIntoView({ block: "nearest" });
+    try {
+      const out = await post(`/sources/${encodeURIComponent(item.source_id)}/test`, undefined, { query: { polite: true }, silent: true });
+      const label = out.status === "OK" ? badge("ok", `OK · ${out.rows.length} rows`) : out.status === "BLOCKED" ? badge("urg", "Blocked") : badge("urg", "Problem");
+      rows.push({ id: item.source_id, badge: label, message: out.message });
+    } catch (e) {
+      rows.push({ id: item.source_id, badge: badge("urg", "Problem"), message: e.message });
+    }
+  }
+  paint(null);
+}
+
+// ---------- Bulk add ----------
+function openBulk() {
+  state.bulk = null;
+  const root = $("so-bulk");
+  root.hidden = false;
+  root.innerHTML =
+    '<div class="row row-between gap-2"><h2 class="section-title-sm">Bulk add sources</h2>' +
+    '<button type="button" class="btn btn-o" data-bulk-close>Close</button></div>' +
+    '<p class="text-14">Upload a CSV or Excel (.xlsx) file with a header row, or paste rows. Up to 50 rows. Nothing is saved until you choose “Save valid rows for approval”, and a different person must approve each source.</p>' +
+    '<form class="form" id="so-bulk-form" novalidate><div class="form-grid-2">' +
+    '<div class="field"><label for="bulk-file">File (.csv or .xlsx)</label><input id="bulk-file" type="file" accept=".csv,.xlsx"></div>' +
+    '<div class="field"><label for="bulk-text">Or paste rows (with the header row)</label><textarea id="bulk-text" rows="4" spellcheck="false"></textarea></div></div>' +
+    '<div class="row gap-2"><button type="submit" class="btn btn-p">Check rows</button>' +
+    '<a href="/api/v1/sources/bulk-import/template.csv" download="sources-template.csv">Download template</a></div></form>' +
+    '<div id="so-bulk-preview" class="stack gap-3"></div>';
+  root.scrollIntoView({ block: "nearest" });
+}
+
+const STATUS_BADGE = { OK: badge("ok", "OK"), WARNING: badge("mod", "Warning"), ERROR: badge("urg", "Error") };
+
+function renderPreview(p) {
+  state.bulk = p;
+  const savable = p.ok + p.warnings;
+  $("so-bulk-preview").innerHTML =
+    `<p class="text-14" aria-live="polite"><strong>${p.rows.length} rows</strong> in ${escapeHtml(p.file_name)}: ${p.ok} OK, ${p.warnings} with a warning, ${p.errors} with an error.</p>` +
+    '<div class="table-wrap"><table><thead><tr><th scope="col">Row</th><th scope="col">Authority · page</th><th scope="col">URL</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead><tbody>' +
+    p.rows
+      .map(
+        (r) =>
+          `<tr><td>${r.row}</td><td>${escapeHtml(r.authority)} · ${escapeHtml(r.page_name)}</td><td><code>${escapeHtml(r.url)}</code></td><td>${STATUS_BADGE[r.status]}</td>` +
+          `<td>${r.reasons.length ? `<ul>${r.reasons.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : "—"}</td></tr>`,
+      )
+      .join("") +
+    "</tbody></table></div>" +
+    '<div class="row gap-2 wrap">' +
+    `<button type="button" class="btn btn-g" data-bulk-save${savable ? "" : " disabled"}>Save ${savable} valid row${savable === 1 ? "" : "s"} for approval</button>` +
+    (p.errors ? '<button type="button" class="btn btn-o" data-bulk-errors>Download errors.csv</button>' : "") +
+    "</div>";
+}
+
+async function previewBulk(form) {
+  const fd = new FormData();
+  const file = form.querySelector("#bulk-file").files[0];
+  if (file) fd.append("file", file);
+  else fd.append("text", form.querySelector("#bulk-text").value);
+  try {
+    renderPreview(await post("/sources/bulk-import/preview", fd));
+  } catch {
+    $("so-bulk-preview").innerHTML = "";
+  }
+}
+
+async function saveBulk() {
+  const p = state.bulk;
+  if (!p) return;
+  try {
+    const out = await post("/sources/bulk-import/save", { file_name: p.file_name, rows: p.rows.map((r) => r.raw) });
+    toast(`${out.saved} source${out.saved === 1 ? "" : "s"} saved as version 1. Waiting for approval${out.skipped ? `; ${out.skipped} skipped` : ""}.`, { type: "ok" });
+    $("so-bulk").hidden = true;
+    state.bulk = null;
+    await load();
+  } catch {
+    /* api() already showed the reason */
+  }
+}
+
+async function downloadErrors() {
+  const p = state.bulk;
+  if (!p) return;
+  const bad = p.rows.filter((r) => r.status === "ERROR").map((r) => r.raw);
+  const response = await fetch("/api/v1/sources/bulk-import/errors.csv", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows: bad }),
+  });
+  if (!response.ok) return void toast("Could not make errors.csv.", { type: "err" });
+  const url = URL.createObjectURL(await response.blob());
+  const a = Object.assign(document.createElement("a"), { href: url, download: "errors.csv" });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ---------- Register ----------
@@ -77,7 +269,7 @@ function renderRegister() {
           : "—";
       const actions = s.planned
         ? `<a href="#" data-edit="${i}">Set up</a>`
-        : `<a href="#" data-edit="${i}">Edit</a> · <a href="#" data-test="${escapeHtml(s.id)}">Test</a>`;
+        : `<a href="#" data-edit="${i}">Edit</a> · <a href="#" data-test="${escapeHtml(s.id)}">Test</a> · <a href="#" class="link-danger" data-delete="${i}">Delete</a>`;
       return (
         `<tr><td class="fw-500">${escapeHtml(s.authority)} · ${escapeHtml(s.page_name)}</td>` +
         `<td>${escapeHtml(s.planned && !s.url ? "To be confirmed by probe" : v.how_we_read_it)}</td>` +
@@ -110,11 +302,12 @@ function formHtml(s, isNew) {
       ([key, label]) =>
         `<div class="field"><label for="f-sel-${key}">${label}</label><input id="f-sel-${key}" data-sel="${key}" value="${escapeHtml(sel[key] || "")}" autocomplete="off"></div>`,
     ).join("") +
-    `<div class="field"><label for="f-datefmt">Date format</label><input id="f-datefmt" name="date_format" value="${escapeHtml(cfg.date_format || "")}" placeholder="%d.%m.%Y" autocomplete="off"></div></div></fieldset>` +
+    `<div class="field"><label for="f-datefmt">Date format</label><input id="f-datefmt" name="date_format" value="${escapeHtml(cfg.date_format || "")}" placeholder="%d.%m.%Y" autocomplete="off"></div></div>` +
+    `<label class="check"><input type="checkbox" name="date_from_header_row"${cfg.date_from_header_row ? " checked" : ""}> Dates and section names are heading rows between the items</label></fieldset>` +
     `<div class="field"><label for="f-inc">Include keywords (one per line)</label><textarea id="f-inc" name="include_keywords" rows="3">${escapeHtml(lines(s.include_keywords))}</textarea></div>` +
     `<div class="field"><label for="f-exc">Exclude keywords (one per line)</label><textarea id="f-exc" name="exclude_keywords" rows="3">${escapeHtml(lines(s.exclude_keywords))}</textarea></div>` +
     `<div class="field"><label for="f-pri">Priority</label><select id="f-pri" name="priority">${PRIORITIES.map(([v, l]) => opt(v, l, s.priority)).join("")}</select></div>` +
-    `<label class="check"><input type="checkbox" name="requires_js"${s.requires_js ? " checked" : ""}> Needs a browser to render the page</label>` +
+    `<label class="check"><input type="checkbox" name="requires_js"${s.requires_js ? " checked" : ""}> Needs a browser to render the page <span class="muted text-13" id="f-js-note"></span></label>` +
     (isNew
       ? '<label class="check"><input type="checkbox" checked disabled> Active once approved</label>'
       : `<label class="check"><input type="checkbox" name="active"${s.active ? " checked" : ""}> Active</label>`) +
@@ -138,6 +331,8 @@ function readForm(form, base) {
   else delete adapter.selectors;
   if (text("date_format")) adapter.date_format = text("date_format");
   else delete adapter.date_format;
+  if (fd.get("date_from_header_row") === "on") adapter.date_from_header_row = true;
+  else delete adapter.date_from_header_row;
   return {
     authority: text("authority"),
     page_name: text("page_name"),
@@ -169,6 +364,16 @@ function openForm(v) {
   form.addEventListener("click", (e) => {
     if (e.target instanceof Element && e.target.closest("[data-cancel]")) closeDrawer();
   });
+  // Shows what the server will store: these two ways of reading never need a browser.
+  const syncBrowserBox = () => {
+    const box = form.elements.requires_js;
+    const none = ["RSS", "HTML_LIST"].includes(form.elements.type.value);
+    box.disabled = none;
+    if (none) box.checked = false;
+    form.querySelector("#f-js-note").textContent = none ? "(not needed for this way of reading)" : "";
+  };
+  form.elements.type.addEventListener("change", syncBrowserBox);
+  syncBrowserBox();
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const values = readForm(form, base);
@@ -244,11 +449,45 @@ async function testSource(id) {
   root.scrollIntoView({ block: "nearest" });
 }
 
+// ---------- Delete ----------
+async function deleteSource(view) {
+  const s = view.source;
+  const ok = await confirmModal({
+    title: `Delete ${s.authority} · ${s.page_name}?`,
+    body: "This proposes removing the source. A different person must approve it. It then stops being crawled and leaves this list, but its past runs, items and snapshots are kept.",
+    confirmLabel: "Propose delete",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await del(`/sources/${encodeURIComponent(s.id)}`);
+  } catch {
+    return; // api() already showed the error
+  }
+  toast("Delete proposed. It waits for a different person to approve it.", { type: "ok" });
+  await load();
+}
+
 // ---------- Wiring ----------
 document.addEventListener("click", (e) => {
   const t = e.target instanceof Element ? e.target : null;
   if (!t) return;
   if (t.closest("#so-add")) return void openForm(null);
+  if (t.closest("#so-bulk-open")) return void openBulk();
+  if (t.closest("[data-bulk-close]")) return void ($("so-bulk").hidden = true);
+  if (t.closest("[data-bulk-save]")) return void saveBulk();
+  if (t.closest("[data-bulk-errors]")) return void downloadErrors();
+  const by = t.closest("[data-select-by]");
+  if (by) {
+    for (const v of state.views) if (v.pending_version && v.pending_version.requested_by === by.dataset.selectBy) state.selected.add(keyOf(v));
+    return void renderPending();
+  }
+  if (t.closest("[data-select-none]")) {
+    state.selected.clear();
+    return void renderPending();
+  }
+  const bulk = t.closest("[data-bulk]");
+  if (bulk) return void (bulk.dataset.bulk === "test" ? testSelected() : bulkDecide(bulk.dataset.bulk));
   const edit = t.closest("[data-edit]");
   if (edit) {
     e.preventDefault();
@@ -259,10 +498,30 @@ document.addEventListener("click", (e) => {
     e.preventDefault();
     return void testSource(test.dataset.test);
   }
+  const remove = t.closest("[data-delete]");
+  if (remove) {
+    e.preventDefault();
+    return void deleteSource(state.views[Number(remove.dataset.delete)]);
+  }
   const approve = t.closest("[data-approve]");
   if (approve) return void decide(Number(approve.dataset.approve), "approve");
   const reject = t.closest("[data-reject]");
   if (reject) return void decide(Number(reject.dataset.reject), "reject");
+});
+
+document.addEventListener("change", (e) => {
+  const box = e.target instanceof Element ? e.target.closest("[data-select]") : null;
+  if (!box) return;
+  if (box.checked) state.selected.add(box.dataset.select);
+  else state.selected.delete(box.dataset.select);
+  renderBulkBar(state.views.filter((v) => v.pending_version), true);
+});
+
+document.addEventListener("submit", (e) => {
+  if (e.target instanceof Element && e.target.id === "so-bulk-form") {
+    e.preventDefault();
+    previewBulk(e.target);
+  }
 });
 
 load().catch(() => {

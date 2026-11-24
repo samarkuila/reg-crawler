@@ -10,13 +10,16 @@ from app.services.config import ConfigService
 from app.services.crawl_runner import CrawlRunner, SubprocessLauncher
 from app.services.cycle_export import CycleExportService
 from app.services.daily_update import DailyUpdateService
+from app.services.db_admin import DbAdminService
 from app.services.documents import DocumentService, SubprocessDocumentFetcher
 from app.services.email_render import EmailRenderService
 from app.services.health import HealthService
 from app.services.history import HistoryService
 from app.services.luna import LunaService
 from app.services.review import ReviewService
+from app.services.robots import make_robots_check
 from app.services.scheduler import SchedulerService
+from app.services.source_bulk import SourceBulkService
 from app.services.source_test import SourceTester
 from app.services.users import UserService
 
@@ -40,6 +43,8 @@ class Services:
     alerts: AlertService
     agent: "AgentOrchestrator"
     luna: LunaService
+    db_admin: DbAdminService
+    source_bulk: SourceBulkService
 
 
 def build_services(
@@ -56,6 +61,7 @@ def build_services(
         SubprocessLauncher(),
         DocumentService(repo, SubprocessDocumentFetcher()),
         agent=agent,
+        robots_factory=make_robots_check,
     )
     scheduler = SchedulerService(repo, runner)
     config = ConfigService(repo, source_tester)
@@ -75,4 +81,6 @@ def build_services(
         alerts=AlertService(repo),
         agent=agent,
         luna=LunaService(repo, agent, review),
+        db_admin=DbAdminService(getattr(repo, "engine", None)),
+        source_bulk=SourceBulkService(repo),
     )

@@ -41,6 +41,8 @@ erDiagram
   SOURCE ||--o{ REGULATORY_ITEM : source_id
   CRAWL_RUN ||--o{ REGULATORY_ITEM : first_seen_run_id
   REGULATORY_ITEM ||--o{ REVIEW_DECISION : item_id
+  SOURCE ||--o{ SEEN_FINGERPRINT : source_id
+  CRAWL_RUN ||--o{ SEEN_FINGERPRINT : first_seen_run_id
   SOURCE ||--o{ SNAPSHOT : source_id
   CRAWL_RUN ||--o{ SOURCE_CHECK : run_id
   SOURCE ||--o{ SOURCE_CHECK : source_id
@@ -236,6 +238,8 @@ erDiagram
     datetime first_seen_at
     datetime last_seen_at
     text summary
+    enum origin
+    json flags
   }
   REVIEW_DECISION {
     string id PK
@@ -257,6 +261,16 @@ erDiagram
     text dismiss_reason
     json fields_edited
     bool is_draft
+  }
+  SEEN_FINGERPRINT {
+    string id PK
+    string source_id FK
+    string fingerprint
+    text title
+    date published_date
+    string first_seen_run_id FK
+    datetime first_seen_at
+    enum reason
   }
   SETTING {
     string key PK
@@ -299,7 +313,14 @@ erDiagram
     bool active
     int current_version
     bool planned
+    bool retired
     int position
+    enum first_run_mode
+    int first_run_days
+    bool sorted_newest_first
+    enum baseline_status
+    datetime baseline_at
+    date baseline_window_start
   }
   SOURCE_CHECK {
     string id PK
@@ -311,6 +332,7 @@ erDiagram
     int items_found
     text error_detail
     string snapshot_id FK
+    json stats
   }
   SOURCE_VERSION {
     string id PK

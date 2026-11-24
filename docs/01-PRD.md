@@ -107,6 +107,7 @@ Dismissed items are DECIDED with `treatment = NOT_RELEVANT` — never deleted.
 ### Sources & configuration
 - **FR-01** Maintain a source register: authority, page name, URL(s), type (RSS, HTML_LIST, STRUCTURED_DATA, BROWSER), selectors, date format, include/exclude keywords, priority (NORMAL/URGENT), active.
 - **FR-02** Any source/setting change creates a version in *Pending approval*; only an approver other than the editor can approve. Before/after diff visible.
+- **FR-02b** Bulk add: upload a CSV/.xlsx (or paste up to 50 rows); every row is checked and shown as OK / Warning / Error before anything is saved; valid rows become pending versions that a different approver approves or rejects (singly or selected), each with its own audit event; failed rows download as errors.csv; "Test selected" dry-runs pending sources one at a time with the normal politeness rules.
 - **FR-03** "Test this source" dry run shows parsed rows without saving items.
 - **FR-04** Settings editable in UI: run times, working days, holidays, lookback days, SME routing, recipients, email template texts, dismiss reasons, relevance keywords.
 
@@ -150,6 +151,8 @@ Dismissed items are DECIDED with `treatment = NOT_RELEVANT` — never deleted.
 - **FR-33** Email shows both **issue date** and **date published on the website** in the Reference No. & Date cell when they differ (e.g. "Date: 19.11.2026 · Published on website: 20.11.2026").
 - **FR-34** Effective-date default rules apply even with the agent off: explicit date in the text → that date; "with immediate effect" → issue date; none stated → issue date (else publish date); UNSC/UN notices → publish date unless stated. The rule used is shown to the reviewer.
 - **FR-35** Entity Profile setting (licences, roles and registrations TVS Credit holds or doesn't hold, e.g. NBFC: yes; system participant: no) used by rules and the agent to *suggest* applicability. Compliance owns and approves it.
+- **FR-37** (added 23.11.2026) **Delete a source.** The Sources page has a Delete action. It proposes removal as a pending version that a different approver must approve (rule 9). After approval the source is *retired*: it is no longer crawled and leaves the register, but its runs, items, snapshots and audit events stay (rules 3 and 7). A new source may reuse the name; its id gets a `-2` suffix. Hard deletion is not offered because crawl history refers to the source.
+- **FR-36** (added 23.11.2026) **Database admin page** (`/database`, admin role only): browse every table, search, edit and delete single rows (optionally with the rows that point to them, each audited; a write-once table that points to the row always blocks it), and reset the database. Write-once tables (snapshot, document, audit_event, ai_extraction) are browse only. Every edit, delete and reset writes an audit event. A reset first moves the old database and stored files to `data/backups/<timestamp>` and keeps users and default settings. SQL backend only; off when `APP_ENV=prod` unless `DB_ADMIN_ENABLED=true`.
 
 **Scope note (R1):** Compliance expects the full monitoring list. The POC covers 5 sources (all RBI tabs, UNSC, TRAI, IRDAI, eGazette); the remaining sources follow in wave 2, starting with PIB and MHA (sanctions). This must be confirmed with Compliance (Decision D3).
 

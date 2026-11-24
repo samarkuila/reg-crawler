@@ -65,7 +65,7 @@ Scheduler/RunNow ─► CrawlRunner.start(cycle)
    │        (raw ListingItems + snapshot rows + source_check status)
    │     record exit code / errors → source_check
    ├─ Detection.process(run): fingerprints → item / item_observation → reconcile channels
-   │     → sanity checks → relevance scores → queue document downloads
+   │     → first-crawl window / baseline (below) → sanity checks → relevance scores → queue downloads
    ├─ Documents.fetch(new items): download, hash, extract text, or NEEDS_MANUAL_FETCH
    └─ close run (status COMPLETED / PARTIAL), raise UI alerts, release lock
 ```
@@ -147,11 +147,18 @@ erDiagram
 
 **Crawler writes (Prompt 9).** The Scrapy pipelines write only through the repository: `record_snapshot(snapshot, content, actor)` (row + write-once file + audit event in one transaction; refuses content whose SHA-256 differs), `add_raw_items(items, actor)` (one audit event per batch) and `record_source_check`. Raw rows go to the new table `raw_listing_item` (see `docs/data-model.md`, deviation 7); Detection turns them into items and observations.
 
+**First crawl, baseline and later crawls (added 24.11.2026).** A source starts `NOT_BASELINED`. The runner tells its spider the first-run window (`-a first_run=1 -a first_run_window=<date>`; empty = no limit) and what is left of this run's 50 page requests to the website (`-a max_requests`). The spider reads the page and stops paging once every dated row on a page is older than the window, but only when the source `sorted_newest_first` (otherwise it reads up to `max_pages`). Raw rows are all kept in `raw_listing_item`; it is Detection that decides:
+- *NOT_BASELINED* (window = `crawler.first_run` in `config/settings.yaml`, or the source's own `first_run_mode` / `first_run_days`; `window_start()` in `app/services/first_run.py`): a dated row on or after the window start becomes an item with `origin = BASELINE` (change NEW); a dated row before it only gets a `seen_fingerprint` row (`OUT_OF_WINDOW`); undated rows keep the first `undated_max_items` in page order as items and the rest become `seen_fingerprint` (`UNDATED_BEYOND_LIMIT`). A fingerprint that is already an item is processed normally; one already in `seen_fingerprint` is skipped, so a re-baseline never duplicates. Only when every channel of the run is OK and rows were parsed does the source become `BASELINED` (`baseline_at`, `baseline_window_start`) with an audit event `BASELINE_COMPLETED`. A blocked, failed, empty or unreadable run leaves it `NOT_BASELINED` and the check says why.
+- *BASELINED*: an unknown fingerprint is NEW (`origin = CRAWL`), or BACKDATED with the flag "old date, new on page" when its date is before `baseline_window_start` (or before the last healthy run); a fingerprint only in `seen_fingerprint` is counted as `known_older` and ignored; an existing item whose hash of title + link + date + attachment list changed is MODIFIED with a reason (title changed / date changed / attachment added; the old title/ref/text hash still counts as unchanged, so upgrading flags nothing); an item that was missing and is back is REAPPEARED. Channel (RSS/HTML/BOTH) and `channel_mismatch` are unchanged.
+- *Per-source run counters* are kept on `source_check.stats`: `rows_parsed, pages_read, requests_made, window_start` (crawler) and `new, modified, backdated, reappeared, unchanged, known_older, baseline_items, seen_only` (detection). Shown in `GET /runs/{id}` checks.
+- *Review queue:* `GET /items` leaves out `origin = BASELINE` unless `crawler.first_run.baseline_items_in_review` is true or `?origin=BASELINE` is given; Item history still finds them. `POST /sources/{id}/rebaseline` (approver) and `.	asks.ps1 rebaseline -Source <id>` set `NOT_BASELINED` again (audit `REBASELINE_REQUESTED`); nothing is deleted.
+- *Data model:* `source.first_run_mode, first_run_days, sorted_newest_first, baseline_status, baseline_at, baseline_window_start`; `regulatory_item.origin, flags`; `source_check.stats`; new insert-only table `seen_fingerprint` (unique `source_id, fingerprint`; UPDATE/DELETE triggers on SQLite). Migration `0008_first_run_baseline`.
+
 **Integrity:** triggers reject UPDATE/DELETE on `snapshot`, `document`, `audit_event`; files written once to `data/snapshots/{source}/{date}/{sha256}` and `data/documents/{internal_ref}/{sha256}.{ext}`.
 
 ### Fingerprint and change rules
 - `fingerprint = sha256(source_id + "|" + normalised_ref_no)` if ref no. exists, else `sha256(source_id + "|" + canonical_url)`.
-- NEW: fingerprint unseen. MODIFIED: seen, title/content hash changed. BACKDATED: unseen and `displayed_date` < last successful run date. REAPPEARED: previously absent from listings for ≥1 run, now present.
+- NEW: fingerprint unseen. MODIFIED: seen, content hash (title, link, date, attachments, text) changed. BACKDATED: unseen and `displayed_date` < `baseline_window_start` or < last successful run date. A source's first crawl stores only its window; older rows are `seen_fingerprint` only (see 3.1). REAPPEARED: previously absent from listings for ≥1 run, now present.
 - RSS-vs-HTML: same fingerprint in both → channel BOTH; otherwise `channel_mismatch = true`.
 
 ---
@@ -163,6 +170,7 @@ erDiagram
 | GET | `/runs?date=` | List crawl runs |
 | GET | `/runs/{id}` | Run detail + per-source checks (live progress) |
 | POST | `/crawl/run` | Start ADHOC run (all or `source_id`) |
+| GET | `/crawl/status` | Is a crawl running now: run, sources done / total, the page being read and the step (reading, finding items, documents, screening). Polled every 3 s while running (15 s otherwise) by the status strip on every page; when a run ends the page raises `run-finished` and the Daily review reloads |
 | POST | `/sources/{id}/test` | Dry-run one source; return parsed rows |
 | GET | `/source-checks?cycle=` | Health strip data |
 | POST | `/source-checks/{id}/manual-check` | Mark failed source checked manually |
@@ -185,13 +193,22 @@ erDiagram
 | POST | `/settings/{key}/approve` · `/reject` | Approver ≠ requester (checker) |
 | GET | `/sources/{id}/versions` | Version history with before/after |
 | GET | `/sme-functions` | Active SME functions (id, name) for the review form |
+| DELETE | `/sources/{id}` | Propose deleting a source (202, pending version `{retired: true, active: false}`); approve with the normal version endpoints. Retired sources are hidden from `GET /sources` |
+| GET | `/sources/bulk-import/template.csv` | CSV template for Bulk add (16 columns, header row) |
+| POST | `/sources/bulk-import/preview` | Multipart `file` (.csv/.xlsx) or `text` (pasted rows). Checks every row (OK / Warning / Error + reasons); **writes nothing**. Max 50 rows, unknown columns rejected |
+| POST | `/sources/bulk-import/save` | Re-checks the rows, then in ONE transaction creates one PENDING version 1 per OK/Warning row, one `source_import.batch` audit event (who, file name, row counts, source ids) and the usual per-source and per-version events. Error rows are skipped |
+| POST | `/sources/bulk-import/errors.csv` | `errors.csv` of the failed rows with a `reason` column |
+| POST | `/sources/bulk-decision/approve` · `/reject` | Approve or reject many pending versions (approver role). Each one is decided on its own with the normal checks (not the requester, reason needed to reject) and its own audit events; a refusal for one never stops the others |
+| POST | `/sources/{id}/test?polite=true` | As the normal test, through the host gate: one request per host at a time, at least 2 s between requests to a host, and a circuit breaker (3 blocked/failed tests in a row pause that host for 15 minutes; later tests are skipped with no request) |
 | GET | `/audit?entity=&actor=&action=&from=&to=` · `/audit/view` (same filters; before/after as readable key/value rows and filter options) · `/audit/export.csv` | Audit (read only) |
+| GET | `/admin/db/tables` · `/admin/db/tables/{table}?limit=&offset=&q=` | Database admin (admin only): tables with row counts and rows |
+| PUT · POST | `/admin/db/tables/{table}/rows` (edit) · `/admin/db/tables/{table}/rows/delete` (body `{key, cascade}`; returns `{deleted}`) · `/admin/db/reset` (body `{"confirm": "RESET"}`) | Audited edit, delete and reset; write-once tables return 409 |
 
 Session helpers (POC): `GET /api/v1/me`, `GET /api/v1/users`, `GET /api/v1/health`; the header user switcher posts to `/switch-user` (cookie `poc_user`, hidden when `APP_ENV=prod`).
 Error mapping: 403 wrong role or same person, 404 unknown id, 409 wrong state (e.g. unchecked failed source), 422 invalid input, 501 `/crawl/run` until Prompt 13.
 Roles: reviewer/approver review and upload; admin/approver propose source and settings changes and test sources; only an approver approves, and never their own change or an update they prepared. Viewers read only.
 
-Page routes (`/`, `/review`, `/health` (the Source health screen; JSON liveness is `/api/v1/health`), `/email`, `/history`, `/sources`, `/settings`, `/audit`, `/styleguide`) return Jinja2 shells; data loads via JS.
+Page routes (`/`, `/review`, `/health` (the Source health screen; JSON liveness is `/api/v1/health`), `/email`, `/history`, `/sources`, `/settings`, `/audit`, `/database`, `/styleguide`) return Jinja2 shells; data loads via JS.
 
 ---
 
@@ -232,6 +249,7 @@ Both extend `BaseRegSpider` and run as `scrapy crawl <spider> -a source=<id> -a 
 
 ### Listing spider and "Test this source" (Prompt 11)
 - **`listing`** reads an HTML listing page from the source's `adapter_config` (the same shape the Sources page writes): `selectors.row` / `title` (required), `link`, `date`, `ref_no`, `ministry`, `next` (CSS, inside the row), `selectors.ref_no_regex`, `date_format` (HTML only), `max_pages` (pagination depth = lookback; needs a `next` selector), `ministries` + `always_keep` (ministry filter) and `use_search_form` (must be false: the spider never submits a form). Placeholder (`TODO-…`) or missing selectors give a `PARSE_ERROR` that says so; nothing is guessed.
+- **Heading rows (`date_from_header_row: true`, added 23.11.2026)** for pages such as RBI Master Directions, where dates and section names are heading rows between the items. Needs `selectors.header_row` and `date_format`. A heading row that parses with `date_format` is a date; any other heading row is a section label. Each item row takes the nearest date above it (a date the row shows itself wins) and the nearest section label as `raw_extra.category`. Dates repeat and are in order only inside a section, so nothing is sorted or assumed about the whole page. Rows before the first date heading are kept without a date and the check says how many. The label is stored on the scraped row only: `regulatory_item` has no category column yet.
 - **Keywords never drop rows** (rule 3): matches of the source's include/exclude keywords are recorded as hints in `raw_extra.keywords_matched` / `exclude_hints`, and Detection ranks by them. Only the ministry filter leaves rows out, and the check says how many ("N of M row(s) were outside the ministry filter"). A row with no ministry text is kept; "multiple ministries" (weekly gazettes) is always kept.
 - **`requires_js`** sources use scrapy-playwright only when it is installed (`pip install -e .[js]`) and enabled (`REGCRAWLER_PLAYWRIGHT=1`): a plain headless render, no stealth options. Otherwise the check is `FAILED` with an explanation and nothing is fetched.
 - **Dry run** (`-a dry_run=1 -a source_json=<file> -a out=<file>`): the source comes from a JSON file, one page is read, and no database rows or stored files are written. The parsed rows and the check outcome are written to the `out` file. `POST /api/v1/sources/{id}/test` starts this as a Scrapy **subprocess** (`app/services/source_test.py`, rule 10) and returns the rows. If a change is waiting for approval, the proposed rules are the ones tested, so they can be checked before approving. The in-memory demo backend returns made-up rows instead (`SOURCE_TESTER=mock`; `live` forces the real spider).
@@ -317,3 +335,5 @@ Full spec: `docs/agents/luna-nbfc-agent.md`. Policies: `docs/constraints-and-pol
 - `LlmClient` → AI enrichment with evidence-quote validation.
 - `EmailAlertIngestor` → regulator email alerts from shared mailbox as a second channel.
 - `regulatory_item` with `treatment = IMPLEMENTATION_REQUIRED` → Module 2 (implementation tracker) and per-circular OneDrive folders.
+
+- **Bulk add (added 24.11.2026)** — `app/services/source_bulk.py`. Columns: authority, page_name, url, rss_url, read_mode (`rss_html`→RSS, `html`→HTML_LIST, `data_file`→STRUCTURED_DATA, `browser`→BROWSER), row/title/link/date selectors, `heading_rows_selector` (→`selectors.header_row`), `headings_are_rows` (→`date_from_header_row`), `ref_no_regex`, `date_format`, include/exclude keywords separated by `|`, priority. `requires_js` is true only for `browser`. The upload is CSV (UTF-8) or .xlsx (openpyxl is already a dependency). The host allow-list is `crawler.allowed_hosts` in `config/settings.yaml` plus the hosts of sources already in the register; an unknown host or a login/search-looking url is a Warning, never a block. **Priority:** the system has Normal and Urgent only, so `High` is read as Urgent (with a Warning) and `Low` is an Error. There is no batch column on a version: "Select all by this uploader" uses `requested_by`; the batch is traced by the `source_import.batch` audit event.

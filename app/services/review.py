@@ -50,16 +50,19 @@ from app.schemas.enums import (
     FetchStatus,
     FlagStatus,
     FlagType,
+    ItemOrigin,
     ItemState,
     Priority,
     Treatment,
 )
+from app.services import readable
 from app.services.errors import (
     ConflictError,
     InvalidError,
     NotFoundError,
     TooLargeError,
 )
+from app.services.first_run import FirstRunConfig, load_first_run_config
 from app.services.formatting import CYCLE_NAMES, fmt_date, fmt_time
 from app.services.permissions import REVIEW_ROLES, require_role
 from app.services.prefill_rules import applicability_hint, effective_date
@@ -97,8 +100,9 @@ def latest_final_decision(decisions: list[ReviewDecision]) -> ReviewDecision | N
 
 
 class ReviewService:
-    def __init__(self, repo: Repository) -> None:
+    def __init__(self, repo: Repository, first_run: FirstRunConfig | None = None) -> None:
         self._repo = repo
+        self._first_run = first_run  # tests inject it; otherwise settings.yaml is read
 
     # --- cycles, runs, source health ---------------------------------------------------------
 
@@ -156,8 +160,9 @@ class ReviewService:
             status_label=STATUS_LABELS[check.status],
             http_status=check.http_status,
             items_found=check.items_found,
-            error_detail=check.error_detail,
+            error_detail=readable.plain_error(check.error_detail),
             snapshot_id=check.snapshot_id,
+            stats=check.stats,
             needs_acknowledgement=check.status != CheckStatus.OK and manual is None,
             manual_check=manual,
         )
@@ -316,6 +321,8 @@ class ReviewService:
             decided=item.state in DECIDED_STATES,
             first_seen_at=item.first_seen_at,
             luna=luna,
+            origin=item.origin,
+            flags=item.flags,
         )
 
     def list_items(
@@ -325,18 +332,38 @@ class ReviewService:
         channel: Channel | None,
         q: str | None,
         min_relevance: int | None,
+        origin: ItemOrigin | None = None,
+        include_baseline: bool | None = None,
     ) -> ItemListResponse:
+        """The review queue. Items stored by a source's first crawl (origin BASELINE) are left out
+        unless `crawler.first_run.baseline_items_in_review` is true, `origin` asks for them, or
+        `include_baseline` says so. They are never deleted: Item history shows them."""
+        hide = None
+        if origin is None and not (
+            include_baseline
+            if include_baseline is not None
+            else (self._first_run or load_first_run_config()).baseline_items_in_review
+        ):
+            hide = ItemOrigin.BASELINE
         ref = self.resolve_cycle(cycle)
         sources = {s.id: s for s in self._repo.list_sources()}
         threshold = self._threshold()
         run_ids = {r.id for r in self._repo.find_runs(ref)} if ref else None
         if ref is None and cycle is None:
-            base = self._repo.list_items(ItemFilter())
+            base = self._repo.list_items(ItemFilter(exclude_origin=hide, origin=origin))
         else:
-            base = self._repo.list_items(ItemFilter(cycle=ref))
+            base = self._repo.list_items(ItemFilter(cycle=ref, exclude_origin=hide, origin=origin))
         base_summaries = [self._summary(i, sources, threshold, run_ids) for i in base]
         filtered = self._repo.list_items(
-            ItemFilter(cycle=ref, state=state, channel=channel, q=q, min_relevance=min_relevance)
+            ItemFilter(
+                cycle=ref,
+                state=state,
+                channel=channel,
+                q=q,
+                min_relevance=min_relevance,
+                origin=origin,
+                exclude_origin=hide,
+            )
         )
         summaries = [self._summary(i, sources, threshold, run_ids) for i in filtered]
         summaries.sort(
@@ -348,8 +375,22 @@ class ReviewService:
                 s.title.lower(),
             )
         )
+        hidden = (
+            len(
+                self._repo.list_items(
+                    ItemFilter(cycle=ref, origin=ItemOrigin.BASELINE)
+                    if ref
+                    else ItemFilter(origin=ItemOrigin.BASELINE)
+                )
+            )
+            if hide
+            else 0
+        )
         return ItemListResponse(
-            cycle=ref.id if ref else None, counts=self._counts(base_summaries), items=summaries
+            cycle=ref.id if ref else None,
+            counts=self._counts(base_summaries),
+            items=summaries,
+            baseline_hidden=hidden,
         )
 
     @staticmethod

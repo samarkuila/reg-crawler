@@ -9,15 +9,40 @@ client = TestClient(app)
 STATIC = Path(__file__).resolve().parents[2] / "app" / "static"
 
 COMPONENT_MARKERS = [
-    'class="app-header"', 'class="nav"', 'class="card', "b-new", "b-mod", "b-back", "b-urg",
-    "b-ok", "b-grey", "btn-p", "btn-g", "btn-o", "btn-d", "<table>", "dot-todo", "drawer",
-    "toast", "modal", "empty", "skeleton", "pill",
+    'class="app-header"',
+    'class="nav"',
+    'class="card',
+    "b-new",
+    "b-mod",
+    "b-back",
+    "b-urg",
+    "b-ok",
+    "b-grey",
+    "btn-p",
+    "btn-g",
+    "btn-o",
+    "btn-d",
+    "<table>",
+    "dot-todo",
+    "drawer",
+    "toast",
+    "modal",
+    "empty",
+    "skeleton",
+    "pill",
 ]
 EXTERNAL = re.compile(
     r"""(?:src|href)=["']https?://|url\(["']?https?://|@import\s+["']?https?:|from\s+["']https?://"""
 )
-NAV_LABELS = ["Daily review", "Source health", "Email preview", "Item history", "Sources",
-              "Settings", "Audit log"]
+NAV_LABELS = [
+    "Daily review",
+    "Source health",
+    "Email preview",
+    "Item history",
+    "Sources",
+    "Settings",
+    "Audit log",
+]
 
 
 def test_styleguide_renders_all_components() -> None:
@@ -59,6 +84,11 @@ def test_fonts_self_hosted_with_licence() -> None:
 
 
 def test_static_assets_served() -> None:
-    for path in ("css/tokens.css", "css/components.css", "js/ui.js", "js/api.js",
-                 "fonts/jost-latin-400.woff2"):
+    for path in (
+        "css/tokens.css",
+        "css/components.css",
+        "js/ui.js",
+        "js/api.js",
+        "fonts/jost-latin-400.woff2",
+    ):
         assert client.get(f"/static/{path}").status_code == 200, path

@@ -14,8 +14,15 @@ def _audit(client) -> list[dict]:
 def test_review_page_renders_shell_and_script(client) -> None:
     html = client.get("/review").text
     for marker in (
-        'id="rv-health"', 'id="rv-counts"', 'id="rv-rows"', 'id="rv-manual"', 'id="rv-low"',
-        'id="rv-panel"', "/static/js/pages/review.js", 'id="f-auth"', 'id="f-q"',
+        'id="rv-health"',
+        'id="rv-counts"',
+        'id="rv-rows"',
+        'id="rv-manual"',
+        'id="rv-low"',
+        'id="rv-panel"',
+        "/static/js/pages/review.js",
+        'id="f-auth"',
+        'id="f-q"',
     ):
         assert marker in html, marker
     assert "not built yet" not in html

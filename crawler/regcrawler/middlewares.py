@@ -114,10 +114,19 @@ class BlockDetectionMiddleware:
         if tracker is None:
             return response
         reason = block_reason(request, response, self.config)
-        if reason is None:
-            tracker.mark_attempted(request_channel(request), response.status)
-            return response
-        tracker.block(request_channel(request), reason, response.status)
+        if "channel" not in request.meta:
+            # Not one of the spider's own page requests (for example robots.txt). It must not
+            # count as an attempt on any channel, but a block is still a block for this source.
+            if reason is None:
+                return response
+            expected = getattr(self.crawler.spider, "channels", ())
+            channel = expected[0] if expected else request_channel(request)
+        else:
+            channel = request_channel(request)
+            if reason is None:
+                tracker.mark_attempted(channel, response.status)
+                return response
+        tracker.block(channel, reason, response.status)
         logger.warning(
             "BLOCKED %s (%s): %s. Stopping this source; a person must fetch it manually.",
             getattr(self.crawler.spider, "name", "?"),

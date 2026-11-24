@@ -67,7 +67,12 @@ class CycleExportService:
         ref = ref or next(iter(self._repo.list_cycles()), None)
         if ref is None:
             raise NotFoundError("No crawl has run yet, so there is nothing to export.")
-        summaries = {s.id: s for s in self._review.list_items(ref.id, None, None, None, None).items}
+        summaries = {
+            s.id: s
+            for s in self._review.list_items(
+                ref.id, None, None, None, None, include_baseline=True
+            ).items
+        }
         out = io.StringIO()
         writer = csv.writer(out)
         writer.writerow(HEADERS)

@@ -54,6 +54,26 @@ function rowHtml(e) {
   );
 }
 
+let allRows = [];
+let shownRows = 50;
+
+function paintRows() {
+  const more = allRows.length - shownRows;
+  $("au-rows").innerHTML = allRows.length
+    ? allRows.slice(0, shownRows).map(rowHtml).join("") +
+      (more > 0
+        ? `<tr><td colspan="5"><button type="button" class="btn btn-o" id="au-more">Show 50 more (${more} left)</button></td></tr>`
+        : "")
+    : '<tr><td colspan="5"><div class="empty"><div class="empty-text">No events match these filters.</div></div></td></tr>';
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target instanceof Element && e.target.closest("#au-more")) {
+    shownRows += 50;
+    paintRows();
+  }
+});
+
 async function load() {
   const q = query();
   if (!q) return;
@@ -70,9 +90,9 @@ async function load() {
     optionsFilled = true;
   }
   $("au-count").textContent = `${page.total} ${page.total === 1 ? "event" : "events"}, newest first`;
-  $("au-rows").innerHTML = page.rows.length
-    ? page.rows.map(rowHtml).join("")
-    : '<tr><td colspan="5"><div class="empty"><div class="empty-text">No events match these filters.</div></div></td></tr>';
+  shownRows = 50;
+  allRows = page.rows;
+  paintRows();
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(q)) if (v) params.set(k, v);
   $("au-export").href = `/api/v1/audit/export.csv${params.toString() ? `?${params}` : ""}`;

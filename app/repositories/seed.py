@@ -30,6 +30,7 @@ from app.schemas.entities import (
 )
 from app.schemas.enums import (
     Applicability,
+    BaselineStatus,
     ChangeType,
     Channel,
     CheckChannel,
@@ -85,6 +86,7 @@ def fingerprint(source_id: str, ref_no: str | None, canonical_url: str) -> str:
 
 USERS = [
     AppUser(id="u-divya", name="Divya G.", email="divya@example.invalid", role=UserRole.REVIEWER),
+    AppUser(id="u-user", name="Sam", email="user@example.invalid", role=UserRole.APPROVER),
     AppUser(
         id="u-george", name="George K.", email="george@example.invalid", role=UserRole.APPROVER
     ),
@@ -177,6 +179,8 @@ def _source(
         active=active,
         current_version=version if active else 0,
         planned=not active,
+        # Demo data already holds history for its active sources: past their first crawl.
+        baseline_status=BaselineStatus.BASELINED if active else BaselineStatus.NOT_BASELINED,
     )
 
 

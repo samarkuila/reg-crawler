@@ -33,6 +33,10 @@ SPIDER_MODULES = ["regcrawler.spiders"]
 NEWSPIDER_MODULE = "regcrawler.spiders"
 ADDONS = {}
 
+# --- Scrape Window -----------------------------------------------------------------------------
+# Custom setting read by spiders/pipelines to filter out regulatory updates older than N days.
+LOOKBACK_DAYS = int(os.environ.get("REGCRAWLER_LOOKBACK_DAYS", "7"))
+
 # --- Politeness (rule 2) -----------------------------------------------------------------------
 ROBOTSTXT_OBEY = True
 USER_AGENT = f"TVSCredit-RegMonitor/0.1 (+{load_config().contact})"

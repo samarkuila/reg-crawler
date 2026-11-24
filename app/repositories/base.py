@@ -26,6 +26,7 @@ from app.schemas.entities import (
     Recipient,
     RegulatoryItem,
     ReviewDecision,
+    SeenFingerprint,
     Setting,
     SmeFunction,
     Snapshot,
@@ -33,7 +34,7 @@ from app.schemas.entities import (
     SourceCheck,
     SourceVersion,
 )
-from app.schemas.enums import Cycle, FlagStatus, ItemState, RunStatus
+from app.schemas.enums import BaselineStatus, Cycle, FlagStatus, ItemState, RunStatus
 
 
 class Repository(Protocol):
@@ -45,7 +46,32 @@ class Repository(Protocol):
     def list_sources(self) -> list[Source]: ...
     def get_source(self, source_id: str) -> Source | None: ...
     def create_source(self, source: Source, version: SourceVersion, actor: str) -> Source: ...
+    def create_sources_batch(
+        self, entries: list[tuple[Source, SourceVersion]], actor: str, batch: dict[str, Any]
+    ) -> list[Source]:
+        """Create many pending sources in ONE transaction, with one batch audit event."""
+        ...
+
     def list_source_versions(self, source_id: str) -> list[SourceVersion]: ...
+    def set_source_baseline(
+        self,
+        source_id: str,
+        status: BaselineStatus,
+        window_start: date | None,
+        actor: str,
+        action: str,
+        detail: dict[str, Any],
+    ) -> Source:
+        """Set a source's baseline state and write the audit event in the same transaction."""
+        ...
+
+    def add_seen_fingerprints(
+        self, rows: list[SeenFingerprint], actor: str
+    ) -> list[SeenFingerprint]:
+        """Insert-only. A fingerprint already recorded for the source is skipped."""
+        ...
+
+    def list_seen_fingerprints(self, source_id: str) -> list[SeenFingerprint]: ...
     def get_source_version(self, source_id: str, version: int) -> SourceVersion | None: ...
     def add_source_version(
         self, source_id: str, after: dict[str, Any], actor: str

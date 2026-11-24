@@ -102,14 +102,18 @@ def test_a_rerun_of_the_same_rows_changes_nothing(repo) -> None:
     assert result.events == [] and result.unchanged == 1
     assert len(repo.list_observations(item.id)) == 1  # no new observation for "still there"
     assert repo.get_item(item.id).last_seen_at > item.last_seen_at
-    assert len(repo.list_audit()) == audit_before + 1  # one batch event for the last-seen times
+    # one batch event for the last-seen times, one for the run counters written on the check
+    assert len(repo.list_audit()) == audit_before + 2
 
 
 def test_the_displayed_date_never_decides_what_is_new(repo) -> None:
     # Same item, the website now shows a different date: still the same item, not a new one.
     detect(repo, crawl(repo, SRC, D1, html=[row("KYC Directions", KYC, D1)]))
     result = detect(repo, crawl(repo, SRC, D2, html=[row("KYC Directions", KYC, date(2026, 1, 1))]))
-    assert result.events == []
+    # Never NEW (the fingerprint decides that). The changed date is reported as MODIFIED.
+    assert [e.change for e in result.events] == [ChangeType.MODIFIED]
+    assert not any(e.is_new for e in result.events)
+    assert "date changed" in (result.events[0].item.summary or "")
 
 
 def test_the_first_ever_run_has_no_backdating(repo) -> None:

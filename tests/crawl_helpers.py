@@ -48,9 +48,24 @@ class FakeLauncher:
         self.script = script or {}
         self.before = before
         self.calls: list[tuple[str, str]] = []
+        self.lookbacks: list[int | None] = []
+        self.args: list[dict] = []
 
-    def launch(self, spider: str, source_id: str, run_id: str) -> LaunchResult:
+    def launch(
+        self,
+        spider: str,
+        source_id: str,
+        run_id: str,
+        lookback_days: int | None = None,
+        first_run: bool = False,
+        first_run_window: str | None = None,
+        max_requests: int | None = None,
+    ) -> LaunchResult:
         self.calls.append((source_id, spider))
+        self.lookbacks.append(lookback_days)
+        self.args.append(
+            {"first_run": first_run, "window": first_run_window, "max_requests": max_requests}
+        )
         if self.before:
             self.before(source_id, spider, run_id)
         action = self.script.get((source_id, spider))
