@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 class LunaService:
     def __init__(
-        self, repo: Repository, orchestrator: AgentOrchestrator, review: ReviewService
+        self, repo: Repository, orchestrator: "AgentOrchestrator", review: ReviewService
     ) -> None:
         self._repo = repo
         self._orchestrator = orchestrator
