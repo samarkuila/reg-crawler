@@ -6,6 +6,11 @@ NEW_SOURCE = {
     "page_name": "NACH circulars",
     "type": "HTML_LIST",
     "url": "https://www.npci.org.in/circulars",
+    # An HTML listing needs its row, title and link selectors and a date format.
+    "adapter_config": {
+        "selectors": {"row": "tr.item", "title": "td a", "link": "td a"},
+        "date_format": "%d.%m.%Y",
+    },
 }
 
 

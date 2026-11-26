@@ -21,6 +21,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import yaml
+from parsel import Selector
 
 from app.repositories.base import Repository
 from app.schemas.api import (
@@ -32,7 +33,14 @@ from app.schemas.api import (
     SourceTestResult,
 )
 from app.schemas.entities import AppUser, Source, SourceVersion, now_ist
-from app.schemas.enums import CheckStatus, FirstRunMode, Priority, SourceType, VersionStatus
+from app.schemas.enums import (
+    CheckStatus,
+    FetchEngine,
+    FirstRunMode,
+    Priority,
+    SourceType,
+    VersionStatus,
+)
 from app.services.errors import DomainError, InvalidError
 from app.services.permissions import CONFIG_ROLES, require_role
 
@@ -58,16 +66,25 @@ COLUMNS = (
     "exclude_keywords",
     "priority",
 )
-# Optional first-crawl window columns. A file without them (the 16 columns above) imports unchanged.
-OPTIONAL_COLUMNS = ("first_run_mode", "first_run_days", "sorted_newest_first")
+# Optional columns: the first-crawl window and how the page is fetched. A file without them (the
+# 16 columns above) imports unchanged.
+OPTIONAL_COLUMNS = (
+    "first_run_mode",
+    "first_run_days",
+    "sorted_newest_first",
+    "fetch_engine",
+    "wait_for_selector",
+    "wait_timeout_s",
+)
 ALLOWED_COLUMNS = (*COLUMNS, *OPTIONAL_COLUMNS)
 REQUIRED = ("authority", "page_name", "url", "read_mode")
 READ_MODES = {
     "rss_html": SourceType.RSS,
     "html": SourceType.HTML_LIST,
     "data_file": SourceType.STRUCTURED_DATA,
-    "browser": SourceType.BROWSER,
 }
+OLD_BROWSER_READ_MODE = "browser"  # accepted from old files: read as html + fetch_engine browser
+FETCH_ENGINES = {m.value for m in FetchEngine}
 # The system has two priorities (Normal, Urgent). "High" is accepted as Urgent; "Low" is not
 # something the system can do, so it is refused with a clear message rather than guessed.
 PRIORITIES = {"normal": Priority.NORMAL, "urgent": Priority.URGENT, "high": Priority.URGENT}
@@ -80,7 +97,7 @@ TEMPLATE_ROWS = (
     ),
     (
         "Example authority", "Example page", "https://www.example.gov.in/circulars", "",
-        "browser", "", "", "", "", "", "false", "", "", "", "", "Normal",
+        "html", "div.list li", "a", "a", "span.date", "", "false", "", "%d.%m.%Y", "", "", "Normal",
     ),
 )  # fmt: skip
 _TOKEN = re.compile(r"\(S\([^)]*\)\)", re.IGNORECASE)
@@ -248,11 +265,44 @@ class _Checker:
             rss_url = ""
 
         mode = get("read_mode").lower()
+        engine = get("fetch_engine").lower()
+        if engine and engine not in FETCH_ENGINES:
+            errors.append("fetch_engine must be http or browser.")
+            engine = ""
+        if mode == OLD_BROWSER_READ_MODE:
+            if engine == FetchEngine.HTTP.value:
+                errors.append("read_mode browser means fetch_engine browser, not http.")
+            warnings.append(
+                "read_mode browser is the old way of asking for a browser. It was read as "
+                "read_mode html with fetch_engine browser."
+            )
+            mode, engine = "html", FetchEngine.BROWSER.value
+        engine = engine or FetchEngine.HTTP.value
         source_type: SourceType | None = None
         if mode:
             source_type = READ_MODES.get(mode)
             if source_type is None:
                 errors.append("read_mode must be one of: " + ", ".join(READ_MODES) + ".")
+        if engine == FetchEngine.BROWSER.value and mode and mode != "html":
+            errors.append(
+                "fetch_engine browser is only for read_mode html (an RSS feed is always fetched "
+                "with http, and a data file is not a page)."
+            )
+        wait: dict[str, Any] = {}
+        if get("wait_for_selector"):
+            try:
+                Selector(text="<html></html>").css(get("wait_for_selector"))
+                wait["wait_for_selector"] = get("wait_for_selector")
+            except Exception:  # noqa: BLE001 - parsel raises several error types
+                errors.append("wait_for_selector is not a valid CSS selector.")
+        if get("wait_timeout_s"):
+            try:
+                seconds = int(get("wait_timeout_s"))
+                if not 1 <= seconds <= 60:
+                    raise ValueError
+                wait["wait_timeout_s"] = seconds
+            except ValueError:
+                errors.append("wait_timeout_s must be a whole number from 1 to 60.")
 
         selectors = {
             "row": get("row_selector"),
@@ -369,7 +419,8 @@ class _Checker:
                 "include_keywords": _keywords(get("include_keywords")),
                 "exclude_keywords": _keywords(get("exclude_keywords")),
                 "priority": priority.value,
-                "requires_js": mode == "browser",  # only a browser page may need a browser
+                "fetch_engine": engine,
+                **wait,
                 **window,
             }
         status = "ERROR" if errors else ("WARNING" if warnings else "OK")

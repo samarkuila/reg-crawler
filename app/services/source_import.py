@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from app.repositories.base import Repository
 from app.schemas.entities import Source, SourceVersion, now_ist
-from app.schemas.enums import Priority, SourceType, VersionStatus
+from app.schemas.enums import FetchEngine, Priority, SourceType, VersionStatus
 
 # Fields a source version can carry. `planned` is set once, when the source is registered.
 FIELDS = (
@@ -30,7 +30,9 @@ FIELDS = (
     "include_keywords",
     "exclude_keywords",
     "priority",
-    "requires_js",
+    "fetch_engine",
+    "wait_for_selector",
+    "wait_timeout_s",
     "active",
 )
 GLOBAL_SITES = {"all", "global", "general", "common", "all sites"}
@@ -140,12 +142,29 @@ class SourceSpec(BaseModel):
     include_keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
     priority: Priority = Priority.NORMAL
-    requires_js: bool = False
+    fetch_engine: FetchEngine = FetchEngine.HTTP
+    wait_for_selector: str | None = None
+    wait_timeout_s: int = Field(15, ge=1, le=60)
     active: bool = True
     planned: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def _old_file(cls, data: Any) -> Any:
+        """An older sources.yaml: type BROWSER means HTML_LIST fetched with a browser; the
+        retired requires_js key is ignored."""
+        if not isinstance(data, dict):
+            return data
+        data = {k: v for k, v in data.items() if k != "requires_js"}
+        if str(data.get("type")) == SourceType.BROWSER.value:
+            data["type"] = SourceType.HTML_LIST.value
+            data.setdefault("fetch_engine", FetchEngine.BROWSER.value)
+        return data
+
     @model_validator(mode="after")
     def _check(self) -> "SourceSpec":
+        if self.fetch_engine == FetchEngine.BROWSER and self.type != SourceType.HTML_LIST:
+            raise ValueError("fetch_engine browser is only for an HTML_LIST source")
         if not _SLUG.match(self.id):
             raise ValueError(f"id '{self.id}' must be lower-case letters, digits and dashes")
         if self.planned and self.active:

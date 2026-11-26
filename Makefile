@@ -1,4 +1,4 @@
-.PHONY: dev test lint migrate seed-demo crawl probe demo
+.PHONY: dev test lint migrate seed-demo install-browser crawl probe demo
 
 PY ?= python
 
@@ -16,6 +16,9 @@ migrate:
 
 seed-demo:
 	$(PY) -m app.cli seed-demo
+
+install-browser:
+	$(PY) -m playwright install chromium
 
 crawl:
 	@echo "not implemented until Prompt 13"

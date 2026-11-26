@@ -9,6 +9,8 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+from parsel import Selector
+
 from app.repositories.base import Repository
 from app.schemas.api import (
     BulkDecisionItem,
@@ -22,7 +24,7 @@ from app.schemas.api import (
     SourceView,
 )
 from app.schemas.entities import AppUser, Setting, Source, SourceVersion, now_ist
-from app.schemas.enums import BaselineStatus, SourceType, VersionStatus
+from app.schemas.enums import BaselineStatus, FetchEngine, SourceType, VersionStatus
 from app.services import readable
 from app.services.errors import ConflictError, InvalidError, NotFoundError
 from app.services.permissions import (
@@ -38,7 +40,6 @@ _HOW = {
     SourceType.RSS: "RSS feed + HTML listing",
     SourceType.HTML_LIST: "HTML listing",
     SourceType.STRUCTURED_DATA: "Official data file",
-    SourceType.BROWSER: "Browser-rendered page",
 }
 SETTING_TITLES = {
     "run-times": "Run times",
@@ -61,9 +62,10 @@ _TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
 
-# An RSS feed or an HTML listing is read without a browser, so requires_js is always false for them.
-# Only the "Browser-rendered page" way of reading may need one. (Playwright stays off.)
-_READ_WITHOUT_BROWSER = frozenset({SourceType.RSS, SourceType.HTML_LIST})
+# Changing any of these re-checks that an HTML listing is fully set up (see _check_html_listing).
+_READING_FIELDS = frozenset(
+    {"type", "adapter_config", "fetch_engine", "wait_for_selector", "wait_timeout_s"}
+)
 
 
 def _slug(text: str) -> str:
@@ -140,7 +142,8 @@ class ConfigService:
                 _HOW[SourceType.RSS]
                 if source.rss_url and source.type == SourceType.HTML_LIST
                 else _HOW[source.type]
-            ),
+            )
+            + (" (fetched with a browser)" if source.uses_browser else ""),
             status_label=label,
             pending_version=pending,
             pending_changes=readable.diff_fields(pending.before, pending.after) if pending else [],
@@ -207,13 +210,67 @@ class ConfigService:
                     datetime(2026, 11, 20).strftime(fmt)
                 except ValueError as exc:
                     raise InvalidError("The date format is not valid.") from exc
+        if out.get("type") == SourceType.BROWSER.value:
+            raise InvalidError(
+                "Browser is no longer a way of reading a page. Choose HTML listing and set "
+                "Fetch with to Browser."
+            )
+        if "wait_for_selector" in out:
+            wait = (out["wait_for_selector"] or "").strip()
+            out["wait_for_selector"] = wait or None
+            if wait:
+                try:
+                    Selector(text="<html></html>").css(wait)
+                except Exception as exc:  # noqa: BLE001 - parsel raises several error types
+                    raise InvalidError(
+                        f"The element to wait for is not a valid selector: {exc}"
+                    ) from exc
+        if "wait_timeout_s" in out and not (
+            isinstance(out["wait_timeout_s"], int)
+            and not isinstance(out["wait_timeout_s"], bool)
+            and 1 <= out["wait_timeout_s"] <= 60
+        ):
+            raise InvalidError("Wait up to (seconds) must be a whole number from 1 to 60.")
         return out
+
+    @staticmethod
+    def _check_html_listing(effective: dict[str, Any]) -> None:
+        """Rules for the whole source as it will be stored (both fetch engines alike).
+
+        - Fetch with Browser is only for an HTML listing. An RSS feed is always fetched with plain
+          HTTP, and a data file is not a page.
+        - An HTML listing needs its row, title and link selectors and a date format, whichever
+          engine fetches it: the browser only renders the page, the same parsing then runs on it.
+        """
+        kind = effective.get("type")
+        engine = effective.get("fetch_engine") or FetchEngine.HTTP.value
+        if engine == FetchEngine.BROWSER.value and kind != SourceType.HTML_LIST.value:
+            raise InvalidError(
+                "Fetch with Browser is only available for an HTML listing. An RSS feed is "
+                "always fetched with the standard engine, and a data file is not a page."
+            )
+        if kind != SourceType.HTML_LIST.value:
+            return
+        cfg = effective.get("adapter_config") or {}
+        selectors = cfg.get("selectors") or {}
+        missing = [
+            label
+            for key, label in (("row", "row"), ("title", "title"), ("link", "link"))
+            if not str(selectors.get(key) or "").strip()
+        ]
+        if not str(cfg.get("date_format") or "").strip():
+            missing.append("date format")
+        if missing:
+            raise InvalidError(
+                "An HTML listing needs its " + ", ".join(missing) + " "
+                "(" + ("it is" if len(missing) == 1 else "they are") + " required whether the page "
+                "is fetched with the standard engine or the browser)."
+            )
 
     def create_source(self, user: AppUser, body: SourceCreate) -> SourceView:
         require_role(user, CONFIG_ROLES, "add a source")
         fields = self._check_source_fields(body.model_dump(mode="json", exclude={"id"}))
-        if SourceType(fields["type"]) in _READ_WITHOUT_BROWSER:
-            fields["requires_js"] = False
+        self._check_html_listing(fields)
         source_id = body.id or _slug(f"{fields['authority']}-{fields['page_name']}")
         if not re.match(r"^[a-z0-9][a-z0-9-]{1,60}$", source_id):
             raise InvalidError("Could not make an id from the authority and page name.")
@@ -280,11 +337,11 @@ class ConfigService:
             )
         after = self._check_source_fields(changes.model_dump(mode="json", exclude_unset=True))
         current = source.model_dump(mode="json")
-        if SourceType(after.get("type", source.type)) in _READ_WITHOUT_BROWSER:
-            after["requires_js"] = False  # also clears a flag left over from an earlier version
         after = {k: v for k, v in after.items() if current.get(k) != v}
         if not after:
             raise InvalidError("Nothing would change. Edit at least one field.")
+        if _READING_FIELDS & after.keys():
+            self._check_html_listing({**current, **after})
         return self._repo.add_source_version(source_id, after, user.name)
 
     def delete_source(self, user: AppUser, source_id: str) -> SourceVersion:

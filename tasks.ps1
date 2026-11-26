@@ -1,5 +1,5 @@
 # Windows equivalent of the Makefile (GNU make is not required on Windows).
-# Usage: .\tasks.ps1 <dev|test|lint|migrate|seed-demo|rebaseline|crawl|probe|demo>
+# Usage: .\tasks.ps1 <dev|test|lint|migrate|seed-demo|rebaseline|install-browser|crawl|probe|demo>
 param(
     [Parameter(Position = 0)][string]$Target = "help",
     [Parameter(ValueFromRemainingArguments = $true)]$Rest
@@ -23,9 +23,13 @@ switch ($Target) {
         if (-not $src) { Write-Host "Usage: .\tasks.ps1 rebaseline -Source <id> [-Actor <name>]"; exit 2 }
         & $py -m app.cli rebaseline --source $src --actor $actor
     }
+    "install-browser" {
+        # Chromium for sources with "Fetch with: Browser" (scrapy-playwright). Run once per machine.
+        & $py -m playwright install chromium
+    }
     "crawl"     { Write-Host "not implemented until Prompt 13" }
     "probe"     { Write-Host "not implemented until Prompt 14" }
     "demo"      { Write-Host "not implemented until Prompt 15" }
-    default     { Write-Host "Targets: dev test lint migrate seed-demo rebaseline crawl probe demo" }
+    default     { Write-Host "Targets: dev test lint migrate seed-demo rebaseline install-browser crawl probe demo" }
 }
 exit $LASTEXITCODE

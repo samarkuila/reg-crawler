@@ -121,6 +121,10 @@ def test_first_crawl_gets_the_window_then_the_lookback_setting(client, launcher)
         "page_name": "Fresh page",
         "type": "HTML_LIST",
         "url": "https://newreg.example.gov.in/list",
+        "adapter_config": {
+            "selectors": {"row": "tr", "title": "a", "link": "a"},
+            "date_format": "%d.%m.%Y",
+        },
     }
     made = as_user(client, SAMARENDRA).post(f"{API}/sources", json=body).json()
     sid = made["source"]["id"]
@@ -162,6 +166,10 @@ def test_fifty_requests_per_website_per_run_is_never_exceeded(client, launcher) 
             "page_name": f"Page {n}",
             "type": "HTML_LIST",
             "url": f"https://capreg.example.gov.in/list{n}",
+            "adapter_config": {
+                "selectors": {"row": "tr", "title": "a", "link": "a"},
+                "date_format": "%d.%m.%Y",
+            },
         }
         sid = as_user(client, SAMARENDRA).post(f"{API}/sources", json=body).json()["source"]["id"]
         as_user(client, GEORGE).post(f"{API}/sources/{sid}/versions/1/approve")

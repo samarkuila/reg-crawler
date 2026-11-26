@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Please wait (synthetic test fixture)</title></head>
+<body>
+<div id="box"></div>
+<script>
+  // The verification text exists only AFTER rendering: the raw HTML below the script is clean, so
+  // only a block check on the rendered page can see it. Synthetic: no real site is imitated.
+  setTimeout(function () {
+    document.getElementById("box").innerHTML =
+      "<h1>Verify you are human</h1><p>Complete the captcha to continue.</p>";
+  }, 100);
+</script>
+</body>
+</html>

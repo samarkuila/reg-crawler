@@ -48,8 +48,13 @@ def test_a_new_source_can_reuse_a_deleted_name(client):
     s = view["source"]
     version = as_user(client, SAMARENDRA).delete(f"/api/v1/sources/{sid}").json()["version"]
     as_user(client, GEORGE).post(f"/api/v1/sources/{sid}/versions/{version}/approve")
-    body = {k: s[k] for k in ("authority", "page_name", "type", "url", "rss_url")}
+    body = {k: s[k] for k in ("authority", "page_name", "type", "url", "rss_url", "adapter_config")}
     body["id"] = None
+    if body["type"] == "HTML_LIST":  # an HTML listing needs selectors and a date format
+        body["adapter_config"] = {
+            "selectors": {"row": "tr", "title": "a", "link": "a"},
+            "date_format": "%d.%m.%Y",
+        }
     r = as_user(client, SAMARENDRA).post("/api/v1/sources", json=body)
     assert r.status_code == 201, r.text
     assert r.json()["source"]["id"] != sid

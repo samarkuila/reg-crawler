@@ -11,7 +11,7 @@ from datetime import date
 import pytest
 from scrapy.http import HtmlResponse, Request
 
-from app.schemas.enums import CheckChannel, CheckStatus, SourceType
+from app.schemas.enums import CheckChannel, CheckStatus, FetchEngine, SourceType
 from regcrawler.pipelines import DbPipeline
 from regcrawler.spiders.listing import ListingConfig, ListingConfigError, ListingSpider
 from tests.crawler.conftest import (
@@ -386,31 +386,97 @@ def test_the_listing_url_is_requested(make) -> None:
     assert "playwright" not in request.meta
 
 
-def test_a_source_that_needs_a_browser_fails_clearly_when_there_is_none(make, repo) -> None:
-    spider, crawler = make(TABLE, type=SourceType.BROWSER, requires_js=True)
-    assert start_requests(spider) == []  # scrapy-playwright is not installed or enabled
+def test_a_browser_source_fails_clearly_when_the_browser_is_missing(
+    make, repo, monkeypatch
+) -> None:
+    from regcrawler.spiders import listing
+
+    spider, crawler = make(TABLE, fetch_engine=FetchEngine.BROWSER)
+    monkeypatch.setattr(
+        listing,
+        "unavailable_reason",
+        lambda: "This source is fetched with the browser, but Chromium is not installed. "
+        "Run .\\tasks.ps1 install-browser, then try again.",
+    )
+    assert start_requests(spider) == []  # nothing is fetched
     DbPipeline(crawler, repo).close_spider()
     check = check_of(repo, spider)
-    assert check.status == CheckStatus.FAILED and "requires_js" in check.error_detail
+    assert check.status == CheckStatus.FAILED
+    assert "install-browser" in check.error_detail and "nothing was fetched" in check.error_detail
 
 
-@pytest.mark.parametrize("kind", [SourceType.RSS, SourceType.HTML_LIST])
-def test_an_rss_or_html_listing_source_never_waits_for_a_browser(make, kind) -> None:
-    """A stale requires_js=true stored by an old version must not block these sources."""
-    spider, _ = make(TABLE, type=kind, requires_js=True)
+def test_a_standard_source_never_uses_the_browser(make) -> None:
+    spider, _ = make(TABLE, fetch_engine=FetchEngine.HTTP)
     (request,) = start_requests(spider)
     assert request.url == spider.source.url
-    assert "playwright" not in request.meta
+    assert not {"playwright", "playwright_page_methods", "wait_outcome"} & set(request.meta)
+    assert spider.engine_used == "http"
 
 
-def test_a_browser_request_has_no_evasion_options(make, monkeypatch) -> None:
-    spider, _ = make(TABLE, type=SourceType.BROWSER, requires_js=True)
+@pytest.mark.parametrize("kind", [SourceType.RSS, SourceType.STRUCTURED_DATA])
+def test_the_browser_engine_is_only_for_an_html_listing(make, kind) -> None:
+    """Even a stored browser setting on another way of reading is ignored by the crawler."""
+    spider, _ = make(TABLE, type=kind, fetch_engine=FetchEngine.BROWSER)
+    assert spider.source.uses_browser is False and spider.engine_used == "http"
+
+
+def test_a_browser_request_waits_for_the_list_and_has_no_evasion_options(make, monkeypatch) -> None:
+    from regcrawler.spiders import listing
+
+    monkeypatch.setattr(listing, "unavailable_reason", lambda: None)
     monkeypatch.setattr(ListingSpider, "_playwright_ready", staticmethod(lambda: True))
+    spider, _ = make(TABLE, fetch_engine=FetchEngine.BROWSER, wait_timeout_s=7)
     (request,) = start_requests(spider)
     assert request.meta["playwright"] is True
+    (method,) = request.meta["playwright_page_methods"]
+    page_fn, selector, timeout_ms, _outcome = (method.method, *method.args)
+    assert selector == "tr.item"  # no wait selector set: the row selector
+    assert timeout_ms == 7000 and page_fn is listing.wait_for_list
     forbidden = {"stealth", "proxy", "user_agent", "fingerprint", "playwright_context_kwargs"}
     assert not forbidden & set(request.meta)
     assert not forbidden & set(request.headers)
+    spider2, _ = make(TABLE, fetch_engine=FetchEngine.BROWSER, wait_for_selector="div.loaded")
+    (request2,) = start_requests(spider2)
+    assert request2.meta["playwright_page_methods"][0].args[0] == "div.loaded"
+
+
+def test_the_browser_engine_is_off_unless_the_crawl_was_started_with_it(make, repo, monkeypatch):
+    from regcrawler.spiders import listing
+
+    monkeypatch.setattr(listing, "unavailable_reason", lambda: None)
+    monkeypatch.setattr(ListingSpider, "_playwright_ready", staticmethod(lambda: False))
+    spider, crawler = make(TABLE, fetch_engine=FetchEngine.BROWSER)
+    assert start_requests(spider) == []
+    DbPipeline(crawler, repo).close_spider()
+    assert "not started with the browser engine" in check_of(repo, spider).error_detail
+
+
+def test_a_list_that_never_appears_is_zero_items_with_a_hint_not_failed(make, repo) -> None:
+    spider, crawler = make(TABLE, fetch_engine=FetchEngine.BROWSER)
+    response = page("table_listing.html").replace(
+        body=b"<html><head><title>List</title></head><body><p>loading</p></body></html>"
+    )
+    response.request.meta["wait_outcome"] = {"found": False}  # the browser's wait timed out
+    assert crawl(spider, response, crawler) == []
+    check = check_of(repo, spider)
+    assert check.status == CheckStatus.ZERO_ITEMS
+    assert "page rendered but list not found; check selectors or wait selector" in (
+        check.error_detail
+    )
+    assert check.snapshot_id  # the rendered page is kept as evidence
+
+
+def test_a_rendered_page_is_parsed_with_the_same_selectors(make, repo) -> None:
+    """The engine only changes how the page is fetched: the same rows come out."""
+    http, http_crawler = make(TABLE, fetch_engine=FetchEngine.HTTP)
+    rows_http = crawl(http, page("table_listing.html"), http_crawler)
+    browser, browser_crawler = make(TABLE, fetch_engine=FetchEngine.BROWSER)
+    response = page("table_listing.html")
+    response.request.meta["wait_outcome"] = {"found": True}
+    rows_browser = crawl(browser, response, browser_crawler)
+    keys = ("title", "url", "ref_no", "displayed_date", "raw_extra")
+    parsed = lambda rows: [{k: r.get(k) for k in keys} for r in rows]  # noqa: E731
+    assert parsed(rows_browser) == parsed(rows_http) != []
 
 
 # --- dry run: no database, no stored files -----------------------------------------------------

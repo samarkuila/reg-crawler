@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.schemas.entities import Alert, now_ist
-from app.schemas.enums import AlertKind, CheckStatus, Cycle, RunStatus, SourceType
+from app.schemas.enums import AlertKind, CheckStatus, Cycle, FetchEngine, RunStatus
 from app.services import detection
 from app.services.crawl_runner import (
     CrawlRunner,
@@ -63,8 +63,12 @@ def test_spiders_for_each_kind_of_source(repo) -> None:
     assert [s for s, _ in spiders_for(repo.get_source("rbi"))] == ["rss"]
     page_only = make_source(repo, "page", rss_url=None)
     assert [s for s, _ in spiders_for(page_only)] == ["listing"]
+    # The engine never changes which spider reads a page.
     assert [
-        s for s, _ in spiders_for(page_only.model_copy(update={"type": SourceType.BROWSER}))
+        s
+        for s, _ in spiders_for(
+            page_only.model_copy(update={"fetch_engine": FetchEngine.BROWSER})
+        )
     ] == ["listing"]
 
 

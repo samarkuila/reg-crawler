@@ -19,7 +19,7 @@ Planning is complete (brief, PRD, tech stack, architecture, component architectu
 | M3 | Crawler wave 1 (Prompts 9–11) | 26–27.11 | 🟡 In progress · Prompt 9 Scrapy foundation done (23.11) · Prompt 10 RSS and UNSC spiders done, live samples pending (23.11) · Prompt 11 listing spider and dry-run source test done, live samples and real selectors pending (23.11) | Needs outbound internet. Open: see the Prompt 9 row in the change history |
 | M4 | Detection & run control (Prompts 12–13) | 28.11 | 🟡 In progress · Prompt 12 detection, documents, relevance and pre-fill rules done (23.11) · Prompt 13 crawl runner, Run now, scheduler and alerts done (23.11) | Open: see the Prompt 12 row in the change history |
 | M4b | Luna agent (Prompt 13b) | 28–29.11 | ⚪ Not started | Needs approved LLM endpoint + golden set |
-| M5 | Probe, shadow run, readout (Prompts 14–15) | 30.11 → 05.12 | ⚪ Not started | Needs Divya's past emails |
+| M5 | Probe, shadow run, readout (Prompts 14–15) · fetch engine per source (feat/m5-fetch-engine-per-source: built, awaiting checkpoint) | 30.11 → 05.12 | ⚪ Not started | Needs Divya's past emails |
 
 Legend: 🟢 done/on track · 🟡 at risk / in progress · 🔴 blocked · ⚪ not started
 

@@ -29,11 +29,15 @@ GOOD_HTML = {
     "include_keywords": "NBFC|KYC",
     "priority": "Normal",
 }
-GOOD_BROWSER = {
+GOOD_HTML2 = {
     "authority": "MCA",
-    "page_name": "Bulk browser page",
+    "page_name": "Bulk second page",
     "url": "https://www.mca.gov.in/notices",
-    "read_mode": "browser",
+    "read_mode": "html",
+    "row_selector": "ul.notices li",
+    "title_selector": "a",
+    "link_selector": "a",
+    "date_format": "%d-%m-%Y",
 }
 
 
@@ -56,7 +60,7 @@ def test_preview_writes_nothing_and_flags_each_row(client, audit_count):
     before, count = audit_count(), len(client.get(BASE).json())
     rows = [
         GOOD_HTML,
-        GOOD_BROWSER,
+        GOOD_HTML2,
         {**GOOD_HTML, "page_name": "No selectors", "row_selector": ""},
         {**GOOD_HTML, "page_name": "Bad date", "date_format": "dd/mm"},
         {**GOOD_HTML, "page_name": "Not http", "url": "ftp://x.example/a"},
@@ -74,8 +78,8 @@ def test_preview_writes_nothing_and_flags_each_row(client, audit_count):
     assert r.status_code == 200, r.text
     by = _by_row(r)
     assert by[1]["status"] == "OK" and by[2]["status"] == "OK"
-    assert by[2]["fields"]["requires_js"] is True and by[2]["fields"]["type"] == "BROWSER"
-    assert by[1]["fields"]["requires_js"] is False
+    assert by[2]["fields"]["fetch_engine"] == "http" and by[2]["fields"]["type"] == "HTML_LIST"
+    assert by[1]["fields"]["fetch_engine"] == "http"
     assert by[1]["fields"]["include_keywords"] == ["NBFC", "KYC"]
     assert by[3]["status"] == "ERROR" and "row_selector" in by[3]["reasons"][0]
     assert by[4]["status"] == "ERROR" and "strptime" in by[4]["reasons"][0]
@@ -91,7 +95,7 @@ def test_preview_writes_nothing_and_flags_each_row(client, audit_count):
 def test_duplicate_of_existing_source_is_an_error(client):
     existing = next(v["source"] for v in client.get(BASE).json() if v["source"]["active"])
     row = {
-        **GOOD_BROWSER,
+        **GOOD_HTML2,
         "authority": existing["authority"],
         "page_name": existing["page_name"],
         "url": existing["url"],
@@ -102,7 +106,7 @@ def test_duplicate_of_existing_source_is_an_error(client):
 def test_unknown_columns_and_limits_are_refused_clearly(client):
     bad = _csv(
         [
-            GOOD_BROWSER,
+            GOOD_HTML2,
         ],
         columns=(*COLUMNS, "colour"),
     )
@@ -110,7 +114,7 @@ def test_unknown_columns_and_limits_are_refused_clearly(client):
         f"{BASE}/bulk-import/preview", files={"file": ("a.csv", bad.encode(), "text/csv")}
     )
     assert r.status_code == 422 and "colour" in r.json()["detail"]
-    many = [{**GOOD_BROWSER, "page_name": f"P{n}"} for n in range(51)]
+    many = [{**GOOD_HTML2, "page_name": f"P{n}"} for n in range(51)]
     r = _preview(client, many)
     assert r.status_code == 422 and "50" in r.json()["detail"]
     no_col = "authority,page_name\nA,B\n"
@@ -125,7 +129,7 @@ def test_unknown_columns_and_limits_are_refused_clearly(client):
 
 
 def test_pasted_rows_and_roles(client):
-    text = _csv([GOOD_BROWSER])
+    text = _csv([GOOD_HTML2])
     ok = as_user(client, SAMARENDRA).post(f"{BASE}/bulk-import/preview", data={"text": text})
     assert ok.status_code == 200 and ok.json()["ok"] == 1
     assert (
@@ -135,7 +139,7 @@ def test_pasted_rows_and_roles(client):
 
 
 def test_save_creates_pending_versions_and_audit_and_skips_errors(client, audit_count):
-    rows = [GOOD_HTML, GOOD_BROWSER, {**GOOD_HTML, "page_name": "Broken", "url": "nope"}]
+    rows = [GOOD_HTML, GOOD_HTML2, {**GOOD_HTML, "page_name": "Broken", "url": "nope"}]
     prev = _preview(client, rows).json()
     before = audit_count()
     r = as_user(client, SAMARENDRA).post(
@@ -156,7 +160,7 @@ def test_save_creates_pending_versions_and_audit_and_skips_errors(client, audit_
         if row["source_id"]:
             v = views[row["source_id"]]
             assert v["pending_version"]["status"] == "PENDING" and v["source"]["active"] is False
-            assert v["source"]["requires_js"] == (row["fields"]["type"] == "BROWSER")
+            assert v["source"]["fetch_engine"] == "http" and v["source"]["type"] == "HTML_LIST"
 
 
 def _events(action: str):
@@ -181,7 +185,7 @@ def test_errors_csv_has_reason_column(client):
 def _save_two(client):
     out = as_user(client, SAMARENDRA).post(
         f"{BASE}/bulk-import/save",
-        json={"file_name": "b.csv", "rows": [GOOD_HTML, GOOD_BROWSER]},
+        json={"file_name": "b.csv", "rows": [GOOD_HTML, GOOD_HTML2]},
     )
     return [(r["source_id"], 1) for r in out.json()["rows"]]
 
@@ -193,7 +197,7 @@ def test_uploader_cannot_approve_but_another_approver_can(client, audit_count):
     uploader = as_user(client, GEORGE)  # an approver who is also the uploader
     out = uploader.post(
         f"{BASE}/bulk-import/save",
-        json={"file_name": "g.csv", "rows": [GOOD_BROWSER | {"page_name": "G1"}]},
+        json={"file_name": "g.csv", "rows": [GOOD_HTML2 | {"page_name": "G1"}]},
     ).json()
     mine = [{"source_id": r["source_id"], "version": 1} for r in out["rows"]]
     refused = as_user(client, GEORGE).post(f"{BASE}/bulk-decision/approve", json={"items": mine})
@@ -247,7 +251,14 @@ def test_host_gate_waits_between_requests_and_trips_the_breaker():
         now[0] += seconds
 
     gate = HostGate(min_gap=2.0, trip_after=2, cool_down=100, clock=lambda: now[0], sleep=sleep)
-    src = Source(id="s", authority="A", page_name="P", type="BROWSER", url="https://h.example/x")
+    src = Source(
+        id="s",
+        authority="A",
+        page_name="P",
+        type="HTML_LIST",
+        fetch_engine="browser",
+        url="https://h.example/x",
+    )
     calls = []
 
     def blocked(source):
@@ -273,7 +284,7 @@ def test_host_gate_waits_between_requests_and_trips_the_breaker():
 
 
 def test_the_old_sixteen_column_file_still_imports_unchanged(client):
-    old = _csv([GOOD_HTML, GOOD_BROWSER])  # COLUMNS = the original 16 columns
+    old = _csv([GOOD_HTML, GOOD_HTML2])  # COLUMNS = the original 16 columns
     assert next(csv.reader(io.StringIO(old))) == list(COLUMNS) and len(COLUMNS) == 16
     prev = as_user(client, SAMARENDRA).post(
         f"{BASE}/bulk-import/preview", files={"file": ("old.csv", old.encode(), "text/csv")}
@@ -289,7 +300,7 @@ def test_optional_first_run_columns_are_accepted_and_checked(client):
     rows = [
         {**GOOD_HTML, "first_run_mode": "last_n_days", "first_run_days": "10",
          "sorted_newest_first": "false"},
-        {**GOOD_BROWSER, "first_run_mode": "last_week"},
+        {**GOOD_HTML2, "first_run_mode": "last_week"},
         {**GOOD_HTML, "page_name": "Bad days", "first_run_days": "abc"},
     ]  # fmt: skip
     r = as_user(client, SAMARENDRA).post(

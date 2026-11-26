@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Circulars - Example Regulator (synthetic test fixture, JavaScript list)</title></head>
+<body>
+<h1>Circulars</h1>
+<p>The list below is filled in by JavaScript after the page loads: the raw HTML has no rows.</p>
+<table id="circulars"><tbody id="list"></tbody></table>
+<script>
+  // Same rows and structure as table_listing.html, so the same selectors work for both pages.
+  var rows = [
+    ["/docs/circular-101.pdf?utm_source=site", "RBI/2026-27/45 Know Your Customer Directions for NBFCs", "20-11-2026"],
+    ["/docs/circular-102.pdf", "Auction of Government Securities", "19-11-2026"],
+    ["/docs/circular-103.pdf", "Master Direction on Digital Lending", "18-11-2026"]
+  ];
+  setTimeout(function () {
+    var body = document.getElementById("list");
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      tr.className = "item";
+      tr.innerHTML = '<td><a href="' + r[0] + '">' + r[1] + '</a></td><td class="date">' + r[2] + "</td>";
+      body.appendChild(tr);
+    });
+  }, 300);
+</script>
+</body>
+</html>

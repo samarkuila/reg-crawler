@@ -81,6 +81,7 @@ class BaseRegSpider(scrapy.Spider):
             else MAX_REQUESTS_PER_HOST
         )
         self.requests_made = 0  # page requests made by this crawl
+        self.render_seconds = 0.0  # time the browser spent rendering pages (browser engine only)
         self.repo: Repository | None = None
         self.run: Any = None
         if self.dry_run:
@@ -121,6 +122,11 @@ class BaseRegSpider(scrapy.Spider):
         return super().from_crawler(crawler, *args, **kwargs)
 
     # --- helpers for subclasses ----------------------------------------------------------------
+
+    @property
+    def engine_used(self) -> str:
+        """How this spider fetches pages: "http" unless a subclass renders them in a browser."""
+        return "http"
 
     @property
     def run_ref(self) -> str | None:

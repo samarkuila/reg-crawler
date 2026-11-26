@@ -115,7 +115,7 @@ function renderGrid() {
         .join(" ");
       return (
         `<tr${r.needs_attention ? ' class="row-alert"' : ""}>` +
-        `<td class="fw-500">${escapeHtml(r.authority)} · ${escapeHtml(r.page_name)}</td><td>${escapeHtml(r.channel)}</td>` +
+        `<td class="fw-500">${escapeHtml(r.authority)} · ${escapeHtml(r.page_name)}</td><td>${escapeHtml(r.channel)}${r.fetch_engine === "browser" ? ` ${badge("grey", "Browser")}` : ""}</td>` +
         `${cells}<td>${escapeHtml(r.items_latest)}${missesLink(r)}</td><td><div class="row gap-2">${actions}</div></td></tr>`
       );
     })

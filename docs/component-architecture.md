@@ -46,7 +46,7 @@
 |---|---|---|---|---|---|
 | C1 | **Static UI** | `app/static/`, `app/templates/` | Render pages matching `docs/ui-mockups`; call API; keyboard shortcuts | API | Hold business logic; call DB or LLM |
 | C2 | **API routers** | `app/api/` | Validate requests, resolve user/role, call services, map errors | Services | Touch DB directly |
-| C3 | **CrawlRunner** | `app/services/crawl_runner.py` | Create run, lock, launch Scrapy subprocess per source, collect status, trigger Detection → Documents → Agent | Crawler, Repos, Detection, AgentOrchestrator | Run Scrapy in-process |
+| C3 | **CrawlRunner** | `app/services/crawl_runner.py` | Create run, lock, launch Scrapy subprocess per source (sets `REGCRAWLER_FETCH_ENGINE=browser` for a browser source's `listing` crawl only), collect status, trigger Detection → Documents → Agent | Crawler, Repos, Detection, AgentOrchestrator | Run Scrapy in-process |
 | C4 | **Scheduler** | `app/services/scheduler.py` | APScheduler jobs from settings (10:00, 19:30, urgent hourly), holiday calendar | CrawlRunner, Config | Hard-code times |
 | C5 | **Detection** | `app/services/detection.py` | Fingerprints, change types, RSS-vs-HTML reconciliation, sanity checks | Repos | Use AI or website dates to decide "new" |
 | C6 | **Documents** | `app/services/documents.py` | Download, hash, store, extract text; NEEDS_MANUAL_FETCH | Repos, file store | Bypass blocks |
@@ -59,7 +59,7 @@
 | C13 | **Config** | `app/services/config.py` | Versioned sources/settings/agent guidance; maker–checker approval | Repos, Audit | Apply unapproved versions |
 | C14 | **Audit** | `app/services/audit.py` | Append-only events inside the caller's transaction | Repos | Update/delete events |
 | C15 | **Repositories** | `app/repositories/` | `Repository` protocol; memory + SQL implementations | DB | Contain business rules |
-| C16 | **Scrapy spiders** | `crawler/regcrawler/spiders/` | `rss`, `listing`, `unsc_xml`: fetch + parse | Scrapy, feedparser | Evade blocks |
+| C16 | **Scrapy spiders** | `crawler/regcrawler/spiders/` | `rss`, `listing`, `unsc_xml`: fetch + parse. `listing` fetches with the source's engine: `http`, or `browser` (scrapy-playwright renders, then the same parsing runs; `crawler/regcrawler/browser.py`) | Scrapy, feedparser, scrapy-playwright (browser sources only) | Evade blocks; switch engines by itself |
 | C17 | **BlockDetection** | `crawler/regcrawler/middlewares.py` | Classify CAPTCHA/403/429/challenge/login → BLOCKED | — | Retry with altered headers/proxies |
 | C18 | **Pipelines** | `crawler/regcrawler/pipelines.py` | Snapshot (SHA-256) → Normalise → DbWrite | Repos | Overwrite files |
 | C19 | **CLI** | `app/cli.py` | import-sources, crawl, probe, compare, agent-eval | Services | Bypass services |

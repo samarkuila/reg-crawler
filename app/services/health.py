@@ -97,9 +97,12 @@ class HealthService:
                     for c in cycles
                 ]
                 latest = checks.get((source.id, channel, cycles[-1].id)) if cycles else None
-                rows.append(
-                    self._row(source.id, source.authority, source.page_name, channel, cells, latest)
+                row = self._row(
+                    source.id, source.authority, source.page_name, channel, cells, latest
                 )
+                if channel == CheckChannel.HTML and source.uses_browser:
+                    row.fetch_engine = "browser"
+                rows.append(row)
         runs = self._repo.list_runs()
         return SourceGrid(
             cycles=cycles,
