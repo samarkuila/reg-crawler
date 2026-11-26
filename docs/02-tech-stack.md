@@ -30,7 +30,7 @@
 |---|---|---|---|
 | **Scrapy** | Mature; built-in robots.txt, AutoThrottle, per-domain concurrency, retries, item pipelines, FilesPipeline for documents, spider contracts for testing | Runs on its own event loop (Twisted/asyncio) — awkward to embed inside a web server; learning curve | **Chosen** (team request). Run as a **subprocess** from FastAPI to avoid event-loop conflicts. |
 | httpx + BeautifulSoup/selectolax | Very simple; easy to embed | Politeness, retries, pipelines all hand-built | Good fallback for one-off scripts |
-| Playwright alone | Handles JavaScript pages | Heavy, slow, more likely to look like automation | Only via scrapy-playwright for sites flagged `requires_js` |
+| Playwright alone | Handles JavaScript pages | Heavy, slow, more likely to look like automation | Only via scrapy-playwright for sources a person sets to `fetch_engine = browser` |
 | Managed scraping services | No infra | Data leaves TVS; cost; many market "anti-bot bypass" — conflicts with our rules | Rejected |
 
 **Rules regardless of tool:** obey robots.txt, identify the user agent, ≥2 s delay per host, no proxy/UA rotation, no CAPTCHA solving, no stealth plugins.

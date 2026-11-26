@@ -311,6 +311,9 @@ erDiagram
     json exclude_keywords
     enum priority
     bool requires_js
+    enum fetch_engine
+    text wait_for_selector
+    int wait_timeout_s
     bool active
     int current_version
     bool planned

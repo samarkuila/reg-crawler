@@ -37,6 +37,7 @@ from app.schemas.enums import (
     CheckChannel,
     CheckStatus,
     Cycle,
+    FetchEngine,
     FetchStatus,
     FirstRunMode,
     FlagStatus,
@@ -94,7 +95,15 @@ class Source(Base):
     priority: Mapped[Priority] = mapped_column(
         enum_column(Priority, "source_priority"), default=Priority.NORMAL
     )
-    requires_js: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Deprecated (M5): replaced by fetch_engine. The column stays (NOT NULL) and is always False.
+    requires_js: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    fetch_engine: Mapped[FetchEngine] = mapped_column(
+        enum_column(FetchEngine, "source_fetch_engine"),
+        default=FetchEngine.HTTP,
+        server_default="http",
+    )
+    wait_for_selector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wait_timeout_s: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
     active: Mapped[bool] = mapped_column(Boolean, default=False)
     current_version: Mapped[int] = mapped_column(Integer, default=0)
     planned: Mapped[bool] = mapped_column(Boolean, default=False)  # (added)

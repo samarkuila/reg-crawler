@@ -8,7 +8,7 @@ repositories expose no update/delete for them.
 from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.enums import (
     AgentStatus,
@@ -21,6 +21,7 @@ from app.schemas.enums import (
     CheckChannel,
     CheckStatus,
     Cycle,
+    FetchEngine,
     FetchStatus,
     FirstRunMode,
     FlagStatus,
@@ -65,7 +66,10 @@ class Source(Entity):
     include_keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
     priority: Priority = Priority.NORMAL
-    requires_js: bool = False
+    # How the page is fetched (added 26.11.2026, M5). Independent of `type` (how it is read).
+    fetch_engine: FetchEngine = FetchEngine.HTTP
+    wait_for_selector: str | None = None  # browser only; default is the row selector
+    wait_timeout_s: int = Field(15, ge=1, le=60)
     active: bool = False
     current_version: int = 0
     planned: bool = False  # (added) on the monitoring list but not in the POC; always inactive
@@ -78,13 +82,31 @@ class Source(Entity):
     baseline_at: datetime | None = None
     baseline_window_start: date | None = None
 
-    @property
-    def needs_browser(self) -> bool:
-        """Whether a crawl must render the page in a browser.
+    @model_validator(mode="before")
+    @classmethod
+    def _load_old_versions(cls, data: Any) -> Any:
+        """Old stored versions still load.
 
-        An RSS feed or HTML listing never does, whatever an older version stored in requires_js.
+        - type BROWSER (the old "Browser-rendered page") is read as HTML_LIST + fetch_engine
+          browser.
+        - requires_js is gone. A stale flag on any other type was already ignored by crawls, so it
+          is dropped, never turned into a browser fetch (an engine is only ever chosen by a person).
         """
-        return self.requires_js and self.type not in (SourceType.RSS, SourceType.HTML_LIST)
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        data.pop("requires_js", None)
+        if str(data.get("type")) == SourceType.BROWSER.value:
+            data["type"] = SourceType.HTML_LIST.value
+            # Unconditional: an old version being approved is merged over a source that already
+            # carries fetch_engine "http", and the old type BROWSER was the person's choice.
+            data["fetch_engine"] = FetchEngine.BROWSER.value
+        return data
+
+    @property
+    def uses_browser(self) -> bool:
+        """Whether this source's page is fetched by rendering it in a browser."""
+        return self.fetch_engine == FetchEngine.BROWSER and self.type == SourceType.HTML_LIST
 
 
 class SourceVersion(Entity):

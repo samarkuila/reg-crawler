@@ -7,7 +7,16 @@ class SourceType(StrEnum):
     RSS = "RSS"
     HTML_LIST = "HTML_LIST"
     STRUCTURED_DATA = "STRUCTURED_DATA"
+    # Legacy. "Browser" is no longer a way of reading; it is a way of fetching (FetchEngine).
+    # Kept only so old stored versions load: Source maps it to HTML_LIST + FetchEngine.BROWSER.
     BROWSER = "BROWSER"
+
+
+class FetchEngine(StrEnum):
+    """How a page is fetched, independent of how it is read (SourceType)."""
+
+    HTTP = "http"
+    BROWSER = "browser"  # scrapy-playwright renders the page; the same parsing then runs on it
 
 
 class Priority(StrEnum):

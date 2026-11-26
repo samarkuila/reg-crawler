@@ -51,6 +51,8 @@ from app.services.first_run import load_first_run_config, window_for
 from app.services.permissions import RUN_ROLES, require_role
 from app.services.robots import RobotsCheck
 
+ENGINE_ENV = "REGCRAWLER_FETCH_ENGINE"  # read by crawler/regcrawler/browser.py and settings.py
+
 log = logging.getLogger(__name__)
 ACTOR = "crawl-runner"
 ROOT = Path(__file__).resolve().parents[2]
@@ -84,7 +86,7 @@ def spiders_for(source: Source) -> list[tuple[str, CheckChannel]]:
     pairs: list[tuple[str, CheckChannel]] = []
     if source.rss_url:
         pairs.append(("rss", CheckChannel.RSS))
-    if source.type in (SourceType.HTML_LIST, SourceType.BROWSER):
+    if source.type == SourceType.HTML_LIST:
         pairs.append(("listing", CheckChannel.HTML))
     return pairs
 
@@ -110,6 +112,7 @@ class SpiderLauncher(Protocol):
         first_run: bool = False,
         first_run_window: str | None = None,
         max_requests: int | None = None,
+        fetch_engine: str = "http",
     ) -> LaunchResult: ...
 
 
@@ -139,6 +142,7 @@ class SubprocessLauncher:
         first_run: bool = False,
         first_run_window: str | None = None,
         max_requests: int | None = None,
+        fetch_engine: str = "http",
     ) -> LaunchResult:
         files_root = Path(os.environ.get("FILES_ROOT") or ROOT).resolve()
         log_file = files_root / "data" / "logs" / "runs" / run_id / f"{source_id}-{spider}.log"
@@ -158,11 +162,13 @@ class SubprocessLauncher:
         fixture = self._fixtures.get((source_id, spider))
         if fixture:
             command += ["-a", f"fixture={fixture}"]
+        # Only a browser source's crawl switches the browser on; every other crawl never starts it.
+        engine_env = {ENGINE_ENV: "browser"} if fetch_engine == "browser" else {}
         try:
             done = subprocess.run(  # noqa: S603 - fixed argument list, no shell
                 command,
                 cwd=ROOT / "crawler",
-                env={**os.environ, **self._env},
+                env={**os.environ, **self._env, **engine_env},
                 capture_output=True,
                 text=True,
                 timeout=self._timeout,
@@ -490,12 +496,25 @@ class CrawlRunner:
                 )
                 continue
             started = time.monotonic()
+            engine = "browser" if spider == "listing" and source.uses_browser else "http"
             try:
                 result = self._launcher.launch(
-                    spider, source.id, run.id, **self._spider_args(source, used)
+                    spider,
+                    source.id,
+                    run.id,
+                    fetch_engine=engine,
+                    **self._spider_args(source, used),
                 )
             except Exception as exc:
                 result = LaunchResult(None, error=f"The crawler could not be started: {exc}")
+            log.info(
+                "Source %s (%s): fetch engine=%s, took %.1f s, exit code %s",
+                source.id,
+                spider,
+                engine,
+                time.monotonic() - started,
+                result.exit_code,
+            )
             self._reconcile(run, source, channel, result, time.monotonic() - started)
             made = next(
                 (
@@ -541,6 +560,11 @@ class CrawlRunner:
                 )
             return
         detail = problem or "The crawler finished without reporting a result"
+        if source.uses_browser and channel == CheckChannel.HTML:
+            detail += (
+                ". This source is fetched with the browser; "
+                "if Chromium is missing, run .\\tasks.ps1 install-browser"
+            )
         if result.log_tail:
             detail += f". Log: {result.log_tail}"
         self._repo.record_source_check(

@@ -48,6 +48,10 @@ def test_a_source_can_carry_first_run_overrides_through_the_versioned_path(clien
         "page_name": "Override page",
         "type": "HTML_LIST",
         "url": "https://overreg.example.gov.in/list",
+        "adapter_config": {
+            "selectors": {"row": "tr", "title": "a", "link": "a"},
+            "date_format": "%d.%m.%Y",
+        },
         "first_run_mode": "last_n_days",
         "first_run_days": 14,
         "sorted_newest_first": False,

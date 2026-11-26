@@ -105,7 +105,7 @@ Dismissed items are DECIDED with `treatment = NOT_RELEVANT` — never deleted.
 ## 6. Functional requirements
 
 ### Sources & configuration
-- **FR-01** Maintain a source register: authority, page name, URL(s), type (RSS, HTML_LIST, STRUCTURED_DATA, BROWSER), selectors, date format, include/exclude keywords, priority (NORMAL/URGENT), active.
+- **FR-01** Maintain a source register: authority, page name, URL(s), type (RSS, HTML_LIST, STRUCTURED_DATA), fetch engine (standard or browser, HTML_LIST only; M5), selectors, date format, include/exclude keywords, priority (NORMAL/URGENT), active.
 - **FR-02** Any source/setting change creates a version in *Pending approval*; only an approver other than the editor can approve. Before/after diff visible.
 - **FR-02b** Bulk add: upload a CSV/.xlsx (or paste up to 50 rows); every row is checked and shown as OK / Warning / Error before anything is saved; valid rows become pending versions that a different approver approves or rejects (singly or selected), each with its own audit event; failed rows download as errors.csv; "Test selected" dry-runs pending sources one at a time with the normal politeness rules.
 - **FR-03** "Test this source" dry run shows parsed rows without saving items.

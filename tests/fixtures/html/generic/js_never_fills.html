@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Circulars - Example Regulator (synthetic test fixture, list never appears)</title></head>
+<body>
+<h1>Circulars</h1>
+<p>Loading the list...</p>
+<table id="circulars"><tbody id="list"></tbody></table>
+<script>
+  // The script runs but no row is ever added: the list element the source waits for never appears.
+  document.title = document.title + " (script ran)";
+</script>
+</body>
+</html>

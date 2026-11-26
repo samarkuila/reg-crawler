@@ -279,13 +279,13 @@ def test_source_version_flow(repo) -> None:
     assert approved.approved_by == "George K." and approved.decided_at is not None
     trai = repo.get_source("trai")
     assert trai.priority.value == "URGENT" and trai.current_version == 2
-    w = repo.add_source_version("trai", {"requires_js": True}, "Samarendra K.")
+    w = repo.add_source_version("trai", {"fetch_engine": "browser"}, "Samarendra K.")
     rejected = repo.reject_source_version("trai", w.version, "George K.", "Too slow", "George K.")
     assert rejected.status.value == "REJECTED" and rejected.reject_reason == "Too slow"
     assert [x.version for x in repo.list_source_versions("trai")] == [1, 2, 3] or [
         x.version for x in repo.list_source_versions("trai")
     ] == [2, 3]
-    assert repo.get_source("trai").requires_js is False
+    assert repo.get_source("trai").fetch_engine.value == "http"  # the rejected change is not live
 
 
 def test_approving_a_new_sources_first_version_activates_it(repo) -> None:

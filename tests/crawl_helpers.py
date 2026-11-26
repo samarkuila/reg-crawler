@@ -60,11 +60,17 @@ class FakeLauncher:
         first_run: bool = False,
         first_run_window: str | None = None,
         max_requests: int | None = None,
+        fetch_engine: str = "http",
     ) -> LaunchResult:
         self.calls.append((source_id, spider))
         self.lookbacks.append(lookback_days)
         self.args.append(
-            {"first_run": first_run, "window": first_run_window, "max_requests": max_requests}
+            {
+                "first_run": first_run,
+                "window": first_run_window,
+                "max_requests": max_requests,
+                "fetch_engine": fetch_engine,
+            }
         )
         if self.before:
             self.before(source_id, spider, run_id)

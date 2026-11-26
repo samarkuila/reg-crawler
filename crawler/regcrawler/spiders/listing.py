@@ -34,8 +34,13 @@ Rules this spider follows:
 - Keywords are NOT used to drop rows (rule 3). Matches are recorded as hints in raw_extra and
   detection ranks by them. Only the ministry filter leaves rows out, and the check says how many.
 - Rows without a ministry are kept when the filter cannot be applied (never silently dropped).
-- requires_js sources use scrapy-playwright if it is installed and enabled; there are no stealth
-  options. If it is not available the check says so (FAILED) and nothing is fetched.
+- fetch_engine = browser sources are rendered by scrapy-playwright (plain headless Chromium, no
+  stealth options), then parsed by exactly the same code as a standard page. The browser waits for
+  `wait_for_selector` (else the row selector) up to `wait_timeout_s`; if that element never
+  appears the check is Zero items with a hint, not Failed. If scrapy-playwright or Chromium is
+  missing the check is FAILED, says to run `.\\tasks.ps1 install-browser`, and nothing is fetched.
+  Block detection runs on the rendered page too. The engine is chosen by a person, never switched
+  automatically.
 """
 
 import re
@@ -45,7 +50,8 @@ from typing import Any
 
 from scrapy.http import Response
 
-from app.schemas.enums import CheckChannel
+from app.schemas.enums import CheckChannel, FetchEngine
+from regcrawler.browser import WAIT_MISSING_HINT, unavailable_reason, wait_for_list
 from regcrawler.items import ListingItem
 from regcrawler.spiders.base import BaseRegSpider
 
@@ -148,34 +154,57 @@ class ListingSpider(BaseRegSpider):
             return 1  # a test reads one page; offline there is only one saved page
         return min(self.config.max_pages, self.request_cap)
 
+    @property
+    def engine_used(self) -> str:
+        return FetchEngine.BROWSER.value if self.source.uses_browser else FetchEngine.HTTP.value
+
     def page_request(self, url: str) -> Any:
         meta: dict[str, Any] = {}
-        if self.source.needs_browser:
-            meta["playwright"] = True  # plain page render: no stealth, no evasion options
+        if self.source.uses_browser and self.config is not None:
+            from scrapy_playwright.page import PageMethod
+
+            # Plain page render: no stealth, no evasion options. Wait for the list, never raise.
+            selector = self.source.wait_for_selector or self.config.row
+            outcome: dict[str, Any] = {}
+            meta["playwright"] = True
+            meta["playwright_page_methods"] = [
+                PageMethod(wait_for_list, selector, self.source.wait_timeout_s * 1000, outcome)
+            ]
+            meta["wait_outcome"] = outcome
         return self.get(self.target(url), CHANNEL, self.parse, **meta)
 
     async def start(self) -> Any:
         if self.config is None:
             self.check.parse_error(CHANNEL, f"Reading rules unusable: {self.config_error}")
             return
-        if self.source.needs_browser and not self._playwright_ready():
-            self.check.fail(
-                CHANNEL,
-                "This source needs a browser (requires_js) but scrapy-playwright is not "
-                "installed or enabled; nothing was fetched",
-            )
-            return
+        if self.source.uses_browser:
+            problem = unavailable_reason()
+            if problem is None and not self._playwright_ready():
+                problem = (
+                    "This source is fetched with the browser, but this crawl was not started "
+                    "with the browser engine on (the crawl runner and Test this source do that)"
+                )
+            if problem is not None:
+                self.check.fail(CHANNEL, f"{problem}; nothing was fetched")
+                return
         yield self.page_request(self.source.url)
 
     @staticmethod
     def _playwright_ready() -> bool:
-        try:
-            import scrapy_playwright  # noqa: F401
-        except ImportError:
-            return False
         from regcrawler import settings
 
         return bool(getattr(settings, "PLAYWRIGHT_ENABLED", False))
+
+    def closed(self, reason: str) -> None:
+        """One log line per crawl: engine, browser render time, requests made."""
+        self.logger.info(
+            "fetch engine=%s render_time=%.1fs requests=%d pages=%d (%s)",
+            self.engine_used,
+            self.render_seconds,
+            self.requests_made,
+            self.pages_read,
+            reason,
+        )
 
     # --- parsing -------------------------------------------------------------------------------
 
@@ -183,6 +212,10 @@ class ListingSpider(BaseRegSpider):
         assert self.config is not None
         yield self.snapshot_of(response, CHANNEL)  # the page as received, before anything else
         self.pages_read += 1
+        if self.source.uses_browser:  # the handler records how long the render took
+            self.render_seconds += float(response.meta.get("download_latency") or 0.0)
+        waited = response.meta.get("wait_outcome")
+        wait_missed = waited is not None and waited.get("found") is False
         try:
             entries = self.page_entries(response)
         except Exception as exc:  # an invalid selector is a configuration problem
@@ -192,7 +225,10 @@ class ListingSpider(BaseRegSpider):
             if self.pages_read == 1:
                 self.check.note(
                     CHANNEL,
-                    "The row selector matched nothing on the page; has the page layout changed?",
+                    WAIT_MISSING_HINT
+                    if wait_missed
+                    else "The row selector matched nothing on the page; has the page layout "
+                    "changed?",
                 )
         page_dates: list[date] = []
         for kind, row in entries:

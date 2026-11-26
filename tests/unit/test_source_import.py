@@ -272,7 +272,7 @@ def test_existing_source_with_a_waiting_change_is_left_alone_and_reported(
     service.import_yaml(SOURCES_YAML, SAM)
     config = ConfigService(repo)
     config.approve_version(repo.get_user("u-george"), "unsc-consolidated", 1)
-    repo.add_source_version("unsc-consolidated", {"requires_js": True}, SAM)
+    repo.add_source_version("unsc-consolidated", {"wait_timeout_s": 20}, SAM)
     report = service.import_yaml(SOURCES_YAML, SAM)
     assert any("unsc-consolidated" in line and "waiting" in line for line in report.skipped)
 

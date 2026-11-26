@@ -13,6 +13,7 @@ retry and no workaround.
 """
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -23,12 +24,12 @@ from typing import Protocol
 
 from app.schemas.api import SourceTestResult, SourceTestRow
 from app.schemas.entities import Source
-from app.schemas.enums import CheckStatus, SourceType
+from app.schemas.enums import CheckStatus, FetchEngine, SourceType
 
 ROOT = Path(__file__).resolve().parents[2]
+ENGINE_ENV = "REGCRAWLER_FETCH_ENGINE"  # see crawler/regcrawler/browser.py
 SPIDERS = {
     SourceType.HTML_LIST: "listing",
-    SourceType.BROWSER: "listing",
     SourceType.RSS: "rss",
     SourceType.STRUCTURED_DATA: "unsc_xml",
 }
@@ -50,6 +51,7 @@ class MockSourceTester:
                 duration_seconds=1.4,
                 rows=[],
                 message="The site showed a verification page. The test stopped; nothing was saved.",
+                fetch_engine=source_engine(source),
             )
         rows = [
             SourceTestRow(
@@ -69,6 +71,7 @@ class MockSourceTester:
                 "Mock result (demo backend): these rows are made up. "
                 "Use the SQL backend to test for real."
             ),
+            fetch_engine=source_engine(source),
         )
 
 
@@ -80,6 +83,9 @@ class SubprocessSourceTester:
     def run(self, source: Source) -> SourceTestResult:
         started = time.monotonic()
         spider = SPIDERS.get(source.type, "listing")
+        browser = source.uses_browser
+        timeout = self._timeout + (source.wait_timeout_s if browser else 0)
+        env = {**os.environ, ENGINE_ENV: "browser"} if browser else None
         with tempfile.TemporaryDirectory(prefix="source-test-") as tmp:
             folder = Path(tmp)
             source_file, out_file = folder / "source.json", folder / "result.json"
@@ -107,9 +113,10 @@ class SubprocessSourceTester:
                 done = subprocess.run(  # noqa: S603 - fixed argument list, no shell
                     command,
                     cwd=ROOT / "crawler",
+                    env=env,
                     capture_output=True,
                     text=True,
-                    timeout=self._timeout,
+                    timeout=timeout,
                     check=False,
                 )
             except subprocess.TimeoutExpired:
@@ -117,7 +124,7 @@ class SubprocessSourceTester:
                     source,
                     started,
                     CheckStatus.FAILED,
-                    f"The test took longer than {self._timeout} s and was stopped.",
+                    f"The test took longer than {timeout} s and was stopped.",
                 )
             if not out_file.is_file():
                 return self._result(
@@ -129,7 +136,10 @@ class SubprocessSourceTester:
             payload = json.loads(out_file.read_text(encoding="utf-8"))
         status = CheckStatus(payload["status"])
         rows = [SourceTestRow(**row) for row in payload["rows"]]
-        return self._result(source, started, status, _message(status, payload), rows=rows)
+        engine = FetchEngine(payload.get("engine") or source_engine(source))
+        return self._result(
+            source, started, status, _message(status, payload, source, engine), rows=rows
+        )
 
     @staticmethod
     def _result(
@@ -145,7 +155,15 @@ class SubprocessSourceTester:
             duration_seconds=round(time.monotonic() - started, 1),
             rows=rows or [],
             message=message,
+            fetch_engine=source_engine(source),
         )
+
+
+def source_engine(source: Source) -> FetchEngine:
+    """The engine a test or crawl of this source uses (browser only for an HTML listing)."""
+    return FetchEngine.BROWSER if source.uses_browser else FetchEngine.HTTP
+
+NEEDS_BROWSER_HINT = "The page may need browser mode. Try Fetch with: Browser."
 
 
 def _tail(text: str, lines: int = 3) -> str:
@@ -153,13 +171,17 @@ def _tail(text: str, lines: int = 3) -> str:
     return " ".join(kept)[:400]
 
 
-def _message(status: CheckStatus, payload: dict) -> str:  # type: ignore[type-arg]
+def _message(  # type: ignore[type-arg]
+    status: CheckStatus, payload: dict, source: Source, engine: FetchEngine
+) -> str:
     detail = (payload.get("detail") or "").strip()
     found = payload.get("rows_found", 0)
     if status == CheckStatus.OK:
         text = f"Read {found} row(s) from the page. Nothing was saved."
     elif status == CheckStatus.ZERO_ITEMS:
         text = "The page was read but no rows were found. Nothing was saved."
+        if engine == FetchEngine.HTTP and source.type == SourceType.HTML_LIST:
+            text += " " + NEEDS_BROWSER_HINT  # only the standard engine suggests the browser
     elif status == CheckStatus.BLOCKED:
         text = (
             "The site showed a verification page or refused access. The test stopped; "

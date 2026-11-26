@@ -13,7 +13,10 @@ const TYPES = [
   ["RSS", "RSS feed + HTML listing"],
   ["HTML_LIST", "HTML listing"],
   ["STRUCTURED_DATA", "Official data file"],
-  ["BROWSER", "Browser-rendered page"],
+];
+const ENGINES = [
+  ["http", "Standard"],
+  ["browser", "Browser"],
 ];
 const PRIORITIES = [
   ["NORMAL", "Normal"],
@@ -160,7 +163,7 @@ async function testSelected() {
     try {
       const out = await post(`/sources/${encodeURIComponent(item.source_id)}/test`, undefined, { query: { polite: true }, silent: true });
       const label = out.status === "OK" ? badge("ok", `OK · ${out.rows.length} rows`) : out.status === "BLOCKED" ? badge("urg", "Blocked") : badge("urg", "Problem");
-      rows.push({ id: item.source_id, badge: label, message: out.message });
+      rows.push({ id: item.source_id, badge: label, message: `${out.fetch_engine === "browser" ? "Browser" : "Standard"} engine. ${out.message}` });
     } catch (e) {
       rows.push({ id: item.source_id, badge: badge("urg", "Problem"), message: e.message });
     }
@@ -307,7 +310,12 @@ function formHtml(s, isNew) {
     `<div class="field"><label for="f-inc">Include keywords (one per line)</label><textarea id="f-inc" name="include_keywords" rows="3">${escapeHtml(lines(s.include_keywords))}</textarea></div>` +
     `<div class="field"><label for="f-exc">Exclude keywords (one per line)</label><textarea id="f-exc" name="exclude_keywords" rows="3">${escapeHtml(lines(s.exclude_keywords))}</textarea></div>` +
     `<div class="field"><label for="f-pri">Priority</label><select id="f-pri" name="priority">${PRIORITIES.map(([v, l]) => opt(v, l, s.priority)).join("")}</select></div>` +
-    `<label class="check"><input type="checkbox" name="requires_js"${s.requires_js ? " checked" : ""}> Needs a browser to render the page <span class="muted text-13" id="f-js-note"></span></label>` +
+    '<fieldset id="f-engine-box"><legend>How the page is fetched</legend>' +
+    `<div class="field"><label for="f-engine">Fetch with</label><select id="f-engine" name="fetch_engine">${ENGINES.map(([v, l]) => opt(v, l, s.fetch_engine || "http")).join("")}</select>` +
+    '<span class="muted text-13">Standard reads the page as the website sends it. Browser opens it in a browser first, for pages that fill their list with JavaScript. The selectors above work the same way for both. Never switched automatically.</span></div>' +
+    '<div id="f-browser-opts"><div class="form-grid-2">' +
+    `<div class="field"><label for="f-wait">Wait for this element</label><input id="f-wait" name="wait_for_selector" value="${escapeHtml(s.wait_for_selector || "")}" placeholder="Default: the row selector" autocomplete="off"></div>` +
+    `<div class="field"><label for="f-timeout">Wait up to (seconds)</label><input id="f-timeout" name="wait_timeout_s" type="number" min="1" max="60" step="1" value="${escapeHtml(String(s.wait_timeout_s || 15))}"></div></div></div></fieldset>` +
     (isNew
       ? '<label class="check"><input type="checkbox" checked disabled> Active once approved</label>'
       : `<label class="check"><input type="checkbox" name="active"${s.active ? " checked" : ""}> Active</label>`) +
@@ -333,6 +341,7 @@ function readForm(form, base) {
   else delete adapter.date_format;
   if (fd.get("date_from_header_row") === "on") adapter.date_from_header_row = true;
   else delete adapter.date_from_header_row;
+  const browser = text("type") === "HTML_LIST" && text("fetch_engine") === "browser";
   return {
     authority: text("authority"),
     page_name: text("page_name"),
@@ -343,7 +352,11 @@ function readForm(form, base) {
     include_keywords: splitLines(text("include_keywords")),
     exclude_keywords: splitLines(text("exclude_keywords")),
     priority: text("priority"),
-    requires_js: fd.get("requires_js") === "on",
+    // The server decides what is valid; the form only never sends "browser" for a page type that
+    // cannot use it (the box is hidden then).
+    fetch_engine: browser ? "browser" : "http",
+    wait_for_selector: browser ? text("wait_for_selector") || null : null,
+    wait_timeout_s: browser ? Number(text("wait_timeout_s")) || 15 : 15,
   };
 }
 
@@ -351,7 +364,7 @@ function openForm(v) {
   const isNew = !v;
   const base = v
     ? v.source
-    : { authority: "", page_name: "", url: "", rss_url: "", type: "HTML_LIST", adapter_config: {}, include_keywords: [], exclude_keywords: [], priority: "NORMAL", requires_js: false, active: false };
+    : { authority: "", page_name: "", url: "", rss_url: "", type: "HTML_LIST", adapter_config: {}, include_keywords: [], exclude_keywords: [], priority: "NORMAL", fetch_engine: "http", wait_for_selector: null, wait_timeout_s: 15, active: false };
   const form = document.createElement("form");
   form.className = "form";
   form.noValidate = true;
@@ -364,16 +377,16 @@ function openForm(v) {
   form.addEventListener("click", (e) => {
     if (e.target instanceof Element && e.target.closest("[data-cancel]")) closeDrawer();
   });
-  // Shows what the server will store: these two ways of reading never need a browser.
-  const syncBrowserBox = () => {
-    const box = form.elements.requires_js;
-    const none = ["RSS", "HTML_LIST"].includes(form.elements.type.value);
-    box.disabled = none;
-    if (none) box.checked = false;
-    form.querySelector("#f-js-note").textContent = none ? "(not needed for this way of reading)" : "";
+  // "Fetch with" only exists for an HTML listing; the wait fields only for the Browser engine.
+  // (Hidden fields are ignored by readForm, so a changed dropdown never leaves a stale setting.)
+  const syncEngineBox = () => {
+    const isHtml = form.elements.type.value === "HTML_LIST";
+    form.querySelector("#f-engine-box").hidden = !isHtml;
+    form.querySelector("#f-browser-opts").hidden = form.elements.fetch_engine.value !== "browser";
   };
-  form.elements.type.addEventListener("change", syncBrowserBox);
-  syncBrowserBox();
+  form.elements.type.addEventListener("change", syncEngineBox);
+  form.elements.fetch_engine.addEventListener("change", syncEngineBox);
+  syncEngineBox();
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const values = readForm(form, base);
@@ -444,7 +457,7 @@ async function testSource(id) {
     '<div class="row row-between gap-2">' +
     `<h2 class="section-title-sm">Test result · ${escapeHtml(v ? `${v.source.authority} · ${v.source.page_name}` : id)} (dry run, nothing saved)</h2>` +
     `${badge(ok ? "ok" : "urg", ok ? `Parsed ${out.rows.length} rows in ${out.duration_seconds} s` : `${out.status === "BLOCKED" ? "Blocked" : "Problem"} after ${out.duration_seconds} s`)}</div>` +
-    `<p class="text-14">${escapeHtml(out.message)}</p>${rows}` +
+    `<p class="text-14"><strong>Fetched with:</strong> ${out.fetch_engine === "browser" ? "Browser" : "Standard"}. ${escapeHtml(out.message)}</p>${rows}` +
     '<p class="muted text-13">Check the rows look right before approving. If the site shows a verification page, the test stops and reports “Blocked”.</p>';
   root.scrollIntoView({ block: "nearest" });
 }

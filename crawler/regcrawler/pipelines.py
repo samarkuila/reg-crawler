@@ -223,6 +223,8 @@ class DbPipeline:
                 "rows_parsed": found,
                 "pages_read": getattr(spider, "pages_read", None),
                 "requests_made": getattr(spider, "requests_made", None),
+                "fetch_engine": getattr(spider, "engine_used", "http"),
+                "render_seconds": round(getattr(spider, "render_seconds", 0.0), 1),
                 "window_start": (
                     spider.window_start.isoformat()
                     if getattr(spider, "window_start", None)
@@ -241,6 +243,8 @@ class DbPipeline:
             "http_status": result.http_status,
             "detail": result.detail,
             "rows_found": len(rows),
+            "engine": getattr(spider, "engine_used", "http"),
+            "render_seconds": round(getattr(spider, "render_seconds", 0.0), 1),
             "rows": [
                 {
                     "title": r["title"],

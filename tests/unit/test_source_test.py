@@ -67,7 +67,6 @@ def test_the_live_tester_reports_a_crash_as_a_failed_test_not_an_error(tmp_path)
         page_name="Y",
         type="HTML_LIST",
         url="https://x.test/",
-        requires_js=False,
     )
     result = SubprocessSourceTester(timeout=60, fixture=str(tmp_path / "missing.html")).run(source)
     assert result.status == CheckStatus.FAILED and result.rows == []

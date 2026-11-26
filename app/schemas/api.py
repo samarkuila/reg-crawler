@@ -23,6 +23,7 @@ from app.schemas.enums import (
     Channel,
     CheckStatus,
     Cycle,
+    FetchEngine,
     FirstRunMode,
     ItemOrigin,
     ItemState,
@@ -429,7 +430,9 @@ class SourceChanges(Model):
     include_keywords: list[str] | None = None
     exclude_keywords: list[str] | None = None
     priority: Priority | None = None
-    requires_js: bool | None = None
+    fetch_engine: FetchEngine | None = None
+    wait_for_selector: str | None = None
+    wait_timeout_s: int | None = Field(None, ge=1, le=60)
     active: bool | None = None
     retired: bool | None = None
     first_run_mode: FirstRunMode | None = None
@@ -449,7 +452,9 @@ class SourceCreate(Model):
     include_keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
     priority: Priority = Priority.NORMAL
-    requires_js: bool = False
+    fetch_engine: FetchEngine = FetchEngine.HTTP
+    wait_for_selector: str | None = None
+    wait_timeout_s: int = Field(15, ge=1, le=60)
     # First-crawl window overrides (optional; empty = use crawler.first_run in settings.yaml)
     first_run_mode: FirstRunMode | None = None
     first_run_days: int | None = Field(None, ge=1, le=3650)
@@ -526,6 +531,7 @@ class SourceTestResult(Model):
     duration_seconds: float
     rows: list[SourceTestRow]
     message: str
+    fetch_engine: FetchEngine = FetchEngine.HTTP  # the engine that was used for this test
     saved: bool = False
 
 
@@ -601,6 +607,7 @@ class GridRow(Model):
     authority: str
     page_name: str
     channel: str
+    fetch_engine: str = "http"  # "browser" only for the HTML channel of a browser-fetched source
     cells: list[GridCell]
     items_latest: str  # "10", "1 change" or "—"
     possible_misses: int = 0  # open "possible missed item" flags from Luna's sweep

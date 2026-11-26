@@ -13,6 +13,7 @@ dependencies = [
     "sqlalchemy>=2",
     "alembic",
     "scrapy",
+    "scrapy-playwright",  # fetch_engine = browser (Chromium: .\tasks.ps1 install-browser)
     "feedparser",
     "defusedxml",
     "pymupdf",
@@ -25,7 +26,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-js = ["scrapy-playwright"]  # only for sources with requires_js
 dev = [
     "pytest",
     "pytest-cov",

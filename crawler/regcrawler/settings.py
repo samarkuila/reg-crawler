@@ -15,6 +15,7 @@ import importlib.util
 import os
 import sys
 
+from regcrawler.browser import ENGINE_ENV, proxy_option
 from regcrawler.config import DATA_DIR, ROOT, load_config
 
 # The crawler imports app.repositories / app.services, and is started from the crawler/ folder.
@@ -73,12 +74,15 @@ ITEM_PIPELINES = {
     "regcrawler.pipelines.DbPipeline": 300,
 }
 
-# --- Browser rendering: only for sources marked requires_js, and only if installed --------------
-# scrapy-playwright is an optional extra (pip install -e .[js]; playwright install chromium) and is
-# switched on with REGCRAWLER_PLAYWRIGHT=1. A plain headless render: no stealth plugins, no
-# fingerprint or header tricks (rule 1).
+# --- Browser rendering: only for sources with fetch_engine = browser ------------------------------
+# The crawl runner and "Test this source" start a browser source's crawl with
+# REGCRAWLER_FETCH_ENGINE=browser; every other crawl leaves the download handlers alone, so no
+# browser is ever started for a standard source. scrapy-playwright (uv sync; then
+# `.\tasks.ps1 install-browser` for Chromium) renders the page and the same parsing runs on it.
+# A plain headless render: no stealth plugins, no fingerprint or header tricks (rule 1). The only
+# proxy is the corporate one from the environment, the same as the standard engine uses.
 PLAYWRIGHT_ENABLED = (
-    os.environ.get("REGCRAWLER_PLAYWRIGHT") == "1"
+    os.environ.get(ENGINE_ENV) == "browser"
     and importlib.util.find_spec("scrapy_playwright") is not None
 )
 if PLAYWRIGHT_ENABLED:
@@ -88,6 +92,11 @@ if PLAYWRIGHT_ENABLED:
     }
     PLAYWRIGHT_BROWSER_TYPE = "chromium"
     PLAYWRIGHT_LAUNCH_OPTIONS = {"headless": True}
+    if proxy_option() is not None:
+        PLAYWRIGHT_LAUNCH_OPTIONS["proxy"] = proxy_option()
+    PLAYWRIGHT_MAX_CONTEXTS = 1
+    PLAYWRIGHT_MAX_PAGES_PER_CONTEXT = 1  # one page at a time, like CONCURRENT_REQUESTS_PER_DOMAIN
+    PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = DOWNLOAD_TIMEOUT * 1000
 
 # --- Cache (dev profile only) ------------------------------------------------------------------
 HTTPCACHE_ENABLED = PROFILE == "dev"
